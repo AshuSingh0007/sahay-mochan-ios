@@ -1,31 +1,145 @@
+import AVFoundation
 import Combine
 import Foundation
+import UIKit
 
 @MainActor
 final class MochanViewModel: ObservableObject {
     @Published var responses = Array(repeating: 0, count: PHQ9.questions.count)
-    @Published var auFrames: [AUFrame] = FaceLandmarkerService.sampleFrames()
+    @Published var auFrames: [AUFrame] = []
     @Published var result: AssessmentResult?
     @Published var recordedVideoURL: URL?
     @Published var isProcessing = false
+    @Published var isUploading = false
+    @Published var uploadProgress = 0.0
+    @Published var uploadMessage: String?
     @Published var errorMessage: String?
+    @Published var currentQuestionIndex = 0
+    @Published var liveAIScore: Double?
 
-    private let model = DepressionModel()
+    private let landmarker = FaceLandmarkerService()
+    private var frameCounter = 0
+    private var isAnalyzingFrame = false
 
     var score: Int { responses.reduce(0, +) }
+    var currentQuestion: QuestionnaireQuestion { PHQ9.questions[currentQuestionIndex] }
+    var isLastQuestion: Bool { currentQuestionIndex == PHQ9.questions.count - 1 }
+
+    func reset() {
+        responses = Array(repeating: 0, count: PHQ9.questions.count)
+        auFrames = []
+        result = nil
+        recordedVideoURL = nil
+        isProcessing = false
+        isUploading = false
+        uploadProgress = 0
+        uploadMessage = nil
+        errorMessage = nil
+        currentQuestionIndex = 0
+        liveAIScore = nil
+        frameCounter = 0
+        isAnalyzingFrame = false
+    }
+
+    func moveToNextQuestion() -> Bool {
+        guard !isLastQuestion else { return false }
+        currentQuestionIndex += 1
+        return true
+    }
+
+    nonisolated func processFrame(_ sampleBuffer: CMSampleBuffer) {
+        guard let image = Self.image(from: sampleBuffer) else { return }
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+
+        Task { @MainActor in
+            await self.processImageFrame(image, timestamp: timestamp)
+        }
+    }
 
     func complete(user: User?) async {
         isProcessing = true
         errorMessage = nil
+
         do {
-            let aiScore = try model.predict(questionnaireScore: score, auFrames: auFrames)
-            let auCSV = try CSVExportService.writeAUCSV(frames: auFrames, prefix: "mochan_au")
+            let frames = auFrames.isEmpty ? FaceLandmarkerService.sampleFrames() : auFrames
+            let questionnaireScore = score
+            let aiScore: Double
+
+            if let liveAIScore {
+                aiScore = liveAIScore
+            } else {
+                aiScore = await Task.detached(priority: .userInitiated) {
+                    DepressionModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
+                }.value
+            }
+
+            let auCSV = try CSVExportService.writeAUCSV(frames: frames, prefix: "mochan_au")
             let phqCSV = try CSVExportService.writeQuestionnaireCSV(type: .depression, responses: responses, prefix: "phq9")
-            result = AssessmentResult(type: .depression, score: score, severity: .depression(score: score), aiScore: aiScore, videoURL: recordedVideoURL, auCSVURL: auCSV, questionnaireCSVURL: phqCSV)
-            if let user { try? await UploadService.shared.useTrialAndUpload(user: user, result: result!) }
+            result = AssessmentResult(
+                type: .depression,
+                score: questionnaireScore,
+                severity: .depression(score: questionnaireScore),
+                aiScore: aiScore,
+                videoURL: recordedVideoURL,
+                auCSVURL: auCSV,
+                questionnaireCSVURL: phqCSV
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
+
         isProcessing = false
+    }
+
+    func uploadResult(user: User?) async {
+        guard let user, let result else {
+            errorMessage = "A signed-in user and completed result are required before upload."
+            return
+        }
+
+        isUploading = true
+        uploadProgress = 0.15
+        uploadMessage = nil
+        errorMessage = nil
+
+        do {
+            uploadProgress = 0.45
+            try await UploadService.shared.useTrialAndUpload(user: user, result: result)
+            uploadProgress = 1.0
+            uploadMessage = "Assessment uploaded."
+            NotificationCenter.default.post(name: .assessmentDidUpload, object: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isUploading = false
+    }
+
+    private func processImageFrame(_ image: UIImage, timestamp: TimeInterval) async {
+        frameCounter += 1
+        guard frameCounter % 10 == 0, !isAnalyzingFrame else { return }
+        isAnalyzingFrame = true
+        defer { isAnalyzingFrame = false }
+
+        do {
+            if let frame = try await landmarker.extractActionUnits(from: image, timestamp: timestamp) {
+                auFrames.append(frame)
+                let questionnaireScore = score
+                let frames = auFrames
+                liveAIScore = await Task.detached(priority: .userInitiated) {
+                    DepressionModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
+                }.value
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private nonisolated static func image(from sampleBuffer: CMSampleBuffer) -> UIImage? {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return UIImage(cgImage: cgImage, scale: 1, orientation: .right)
     }
 }

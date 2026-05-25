@@ -36,7 +36,7 @@ enum APIEndpoint {
         case .assessments(let registrationID): return Self.baseURL.appendingPathComponent("api/student/\(registrationID)/assessments")
         case .deleteAssessment(let id): return Self.baseURL.appendingPathComponent("api/assessment/\(id)")
         case .deleteAll(let registrationID): return Self.baseURL.appendingPathComponent("api/student/delete-all/\(registrationID)")
-        case .uploadAssessment: return Self.baseURL.appendingPathComponent("api/student/upload-assessment")
+        case .uploadAssessment: return Self.baseURL.appendingPathComponent("api/student/assessment")
         }
     }
 }

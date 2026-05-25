@@ -1,31 +1,138 @@
 import Combine
+import AVFoundation
 import Foundation
+import UIKit
 
 @MainActor
 final class SahayViewModel: ObservableObject {
     @Published var responses = Array(repeating: 0, count: GAD7.questions.count)
-    @Published var auFrames: [AUFrame] = FaceLandmarkerService.sampleFrames()
+    @Published var auFrames: [AUFrame] = []
     @Published var result: AssessmentResult?
     @Published var recordedVideoURL: URL?
     @Published var isProcessing = false
+    @Published var isUploading = false
+    @Published var uploadProgress = 0.0
+    @Published var uploadMessage: String?
     @Published var errorMessage: String?
+    @Published var currentQuestionIndex = 0
+    @Published var liveAIScore: Double?
 
-    private let model = AnxietyModel()
+    private let landmarker = FaceLandmarkerService()
+    private var frameCounter = 0
+    private var isAnalyzingFrame = false
 
     var score: Int { responses.reduce(0, +) }
+    var currentQuestion: QuestionnaireQuestion { GAD7.questions[currentQuestionIndex] }
+    var isLastQuestion: Bool { currentQuestionIndex == GAD7.questions.count - 1 }
+    var answeredQuestionCount: Int { min(currentQuestionIndex + 1, GAD7.questions.count) }
+
+    func reset() {
+        responses = Array(repeating: 0, count: GAD7.questions.count)
+        auFrames = []
+        result = nil
+        recordedVideoURL = nil
+        isProcessing = false
+        isUploading = false
+        uploadProgress = 0
+        uploadMessage = nil
+        errorMessage = nil
+        currentQuestionIndex = 0
+        liveAIScore = nil
+        frameCounter = 0
+        isAnalyzingFrame = false
+    }
+
+    func moveToNextQuestion() -> Bool {
+        guard !isLastQuestion else { return false }
+        currentQuestionIndex += 1
+        return true
+    }
+
+    // ✅ Called from VideoRecorderService on background thread
+    nonisolated func processFrame(_ sampleBuffer: CMSampleBuffer) {
+        guard let image = Self.image(from: sampleBuffer) else { return }
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
+        
+        // ✅ Create a Task that runs on MainActor for UI updates
+        Task { @MainActor in
+            await self.processImageFrame(image, timestamp: timestamp)
+        }
+    }
 
     func complete(user: User?) async {
         isProcessing = true
         errorMessage = nil
         do {
-            let aiScore = try model.predict(questionnaireScore: score, auFrames: auFrames)
-            let auCSV = try CSVExportService.writeAUCSV(frames: auFrames, prefix: "sahay_au")
+            let frames = auFrames.isEmpty ? FaceLandmarkerService.sampleFrames() : auFrames
+            let questionnaireScore = score
+            let aiScore: Double
+            if let liveAIScore {
+                aiScore = liveAIScore
+            } else {
+                aiScore = await Task.detached(priority: .userInitiated) {
+                    AnxietyModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
+                }.value
+            }
+            let combinedScore = Int(((Double(questionnaireScore) + aiScore) / 2.0).rounded())
+            let auCSV = try CSVExportService.writeAUCSV(frames: frames, prefix: "sahay_au")
             let gadCSV = try CSVExportService.writeQuestionnaireCSV(type: .anxiety, responses: responses, prefix: "gad7")
-            result = AssessmentResult(type: .anxiety, score: score, severity: .anxiety(score: score), aiScore: aiScore, videoURL: recordedVideoURL, auCSVURL: auCSV, questionnaireCSVURL: gadCSV)
-            if let user { try? await UploadService.shared.useTrialAndUpload(user: user, result: result!) }
+            result = AssessmentResult(type: .anxiety, score: score, severity: .anxiety(score: combinedScore), aiScore: aiScore, videoURL: recordedVideoURL, auCSVURL: auCSV, questionnaireCSVURL: gadCSV)
         } catch {
             errorMessage = error.localizedDescription
         }
         isProcessing = false
+    }
+
+    func uploadResult(user: User?) async {
+        guard let user, let result else {
+            errorMessage = "A signed-in user and completed result are required before upload."
+            return
+        }
+
+        isUploading = true
+        uploadProgress = 0.15
+        uploadMessage = nil
+        errorMessage = nil
+
+        do {
+            uploadProgress = 0.45
+            try await UploadService.shared.useTrialAndUpload(user: user, result: result)
+            uploadProgress = 1.0
+            uploadMessage = "Assessment uploaded."
+            NotificationCenter.default.post(name: .assessmentDidUpload, object: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isUploading = false
+    }
+
+    // ✅ Runs on MainActor, but calls MLKit on background (now fixed in FaceLandmarkerService)
+    private func processImageFrame(_ image: UIImage, timestamp: TimeInterval) async {
+        frameCounter += 1
+        guard frameCounter % 10 == 0, !isAnalyzingFrame else { return }
+        isAnalyzingFrame = true
+        defer { isAnalyzingFrame = false }
+
+        do {
+            if let frame = try await landmarker.extractActionUnits(from: image, timestamp: timestamp) {
+                auFrames.append(frame)
+                let questionnaireScore = score
+                let frames = auFrames
+                liveAIScore = await Task.detached(priority: .userInitiated) {
+                    AnxietyModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
+                }.value
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private nonisolated static func image(from sampleBuffer: CMSampleBuffer) -> UIImage? {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return UIImage(cgImage: cgImage, scale: 1, orientation: .right)
     }
 }

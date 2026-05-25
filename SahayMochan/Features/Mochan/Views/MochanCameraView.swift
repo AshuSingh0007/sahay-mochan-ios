@@ -18,8 +18,9 @@ struct MochanCameraView: View {
                     Task { await toggleRecording() }
                 }
                 .buttonStyle(.borderedProminent)
-                NavigationLink("Continue to PHQ-9") { MochanQuestionnaireView(viewModel: viewModel) }
-                    .disabled(recorder.isRecording)
+                Text("Return to Mochan to continue")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
             }
             if let url = viewModel.recordedVideoURL {
                 Text(url.lastPathComponent).font(.caption).foregroundColor(MochanTheme.sage)

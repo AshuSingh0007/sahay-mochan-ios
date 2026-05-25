@@ -1,27 +1,90 @@
 import SwiftUI
-import Combine
 
 struct MochanQuestionnaireView: View {
-    @EnvironmentObject private var auth: AuthViewModel
     @ObservedObject var viewModel: MochanViewModel
+    let onNext: () -> Void
+    let onFinish: () -> Void
+
+    private let labels = [
+        "Not at all",
+        "Several days",
+        "More than half",
+        "Nearly every day"
+    ]
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                ForEach(PHQ9.questions) { question in
-                    QuestionnairePicker(question: question, selection: $viewModel.responses[question.id])
-                }
-                Button { Task { await viewModel.complete(user: auth.currentUser) } } label: {
-                    Text(viewModel.isProcessing ? "Processing..." : "See Result")
-                }
-                .mochanButton(disabled: viewModel.isProcessing)
-                .disabled(viewModel.isProcessing)
-                if let result = viewModel.result { NavigationLink("Open Result", destination: MochanResultView(result: result)).mochanButton() }
-                if let error = viewModel.errorMessage { Text(error).foregroundColor(MochanTheme.severe) }
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Question \(viewModel.currentQuestionIndex + 1) of \(PHQ9.questions.count)")
+                    .font(.caption.bold())
+                    .foregroundColor(MochanTheme.sage)
+                ProgressView(value: Double(viewModel.currentQuestionIndex + 1), total: Double(PHQ9.questions.count))
+                    .tint(MochanTheme.purple)
             }
-            .padding()
+
+            VStack(alignment: .leading, spacing: 16) {
+                Text(viewModel.currentQuestion.text)
+                    .font(.title3.bold())
+                    .foregroundColor(MochanTheme.sageDark)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: 10) {
+                    ForEach(0..<labels.count, id: \.self) { score in
+                        Button {
+                            viewModel.responses[viewModel.currentQuestion.id] = score
+                        } label: {
+                            HStack {
+                                Text("\(score)")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(width: 28, height: 28)
+                                    .background(MochanTheme.purple)
+                                    .clipShape(Circle())
+                                Text(labels[score])
+                                    .foregroundColor(MochanTheme.sageDark)
+                                Spacer()
+                                if viewModel.responses[viewModel.currentQuestion.id] == score {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(MochanTheme.mild)
+                                }
+                            }
+                            .padding(12)
+                            .background(selectionBackground(score: score))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .mochanCard()
+
+            if let aiScore = viewModel.liveAIScore {
+                Text("Live AI score: \(aiScore, specifier: "%.1f") / 27")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+
+            Button {
+                viewModel.isLastQuestion ? onFinish() : onNext()
+            } label: {
+                Text(viewModel.isLastQuestion ? "Finish Assessment" : "Next")
+            }
+            .mochanButton(disabled: viewModel.isProcessing)
+            .disabled(viewModel.isProcessing)
+
+            if viewModel.isProcessing {
+                ProgressView("Analyzing assessment...")
+            }
+
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundColor(MochanTheme.severe)
+            }
         }
-        .background(MochanTheme.sageBackground.ignoresSafeArea())
-        .navigationTitle("PHQ-9")
+    }
+
+    private func selectionBackground(score: Int) -> Color {
+        viewModel.responses[viewModel.currentQuestion.id] == score ? MochanTheme.sageSoft.opacity(0.75) : Color.white
     }
 }

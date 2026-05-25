@@ -1,61 +1,34 @@
 import SwiftUI
-import Combine
 
 struct SahayCameraView: View {
-    @ObservedObject var viewModel: SahayViewModel
-    @StateObject private var camera = CameraService()
-    @StateObject private var recorder = VideoRecorderService()
-    @State private var statusText = "Camera is ready for assessment recording."
+    @ObservedObject var recorder: VideoRecorderService
 
     var body: some View {
-        VStack(spacing: 18) {
-            CameraPreviewPlaceholder()
-            Text(statusText)
-                .font(.footnote)
-                .foregroundColor(.secondary)
-            HStack(spacing: 12) {
-                Button(recorder.isRecording ? "Stop Recording" : "Start Recording") {
-                    Task { await toggleRecording() }
-                }
-                .buttonStyle(.borderedProminent)
-                NavigationLink("Continue to GAD-7") { SahayQuestionnaireView(viewModel: viewModel) }
-                    .disabled(recorder.isRecording)
-            }
-            if let url = viewModel.recordedVideoURL {
-                Text(url.lastPathComponent).font(.caption).foregroundColor(MochanTheme.sage)
-            }
-        }
-        .padding()
-        .background(MochanTheme.sageBackground.ignoresSafeArea())
-        .task { await prepareRecorder() }
-        .navigationTitle("Camera")
-    }
+        ZStack(alignment: .bottomLeading) {
+            CameraPreviewView(session: recorder.session)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(MochanTheme.sage.opacity(0.5), lineWidth: 1)
+                )
 
-    private func prepareRecorder() async {
-        _ = await camera.requestAccess()
-        guard await recorder.requestPermissions() else {
-            statusText = "Camera or microphone permission is required to record assessment video."
-            return
-        }
-        do {
-            try recorder.configureSession()
-            recorder.startSession()
-        } catch {
-            statusText = error.localizedDescription
-        }
-    }
-
-    private func toggleRecording() async {
-        do {
-            if recorder.isRecording {
-                viewModel.recordedVideoURL = try await recorder.stopRecording()
-                statusText = "Recording saved for upload."
-            } else {
-                try recorder.startRecording()
-                statusText = "Recording in progress."
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(recorder.isRecording ? MochanTheme.severe : MochanTheme.sage)
+                    .frame(width: 7, height: 7)
+                Text(recorder.isRecording ? "REC" : "CAM")
+                    .font(.caption2.bold())
+                    .foregroundColor(.white)
             }
-        } catch {
-            statusText = error.localizedDescription
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(Color.black.opacity(0.55))
+            .clipShape(Capsule())
+            .padding(6)
         }
+        .background(MochanTheme.sageDark.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: MochanTheme.sageDark.opacity(0.16), radius: 10, x: 0, y: 6)
+        .accessibilityLabel("Front camera preview")
     }
 }

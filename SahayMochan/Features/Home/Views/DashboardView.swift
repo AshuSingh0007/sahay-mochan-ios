@@ -9,7 +9,7 @@ struct DashboardView: View {
         NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Welcome, \(auth.currentUser?.name ?? "")")
+                    Text("Welcome, \(displayName)")
                         .font(.title2.bold())
                         .foregroundColor(MochanTheme.sageDark)
                     HStack(spacing: 12) {
@@ -57,5 +57,10 @@ struct DashboardView: View {
             .frame(maxWidth: .infinity, minHeight: 84)
             .mochanCard()
         }
+    }
+
+    private var displayName: String {
+        guard let name = auth.currentUser?.name, !name.isEmpty else { return "SahayMochan User" }
+        return name
     }
 }

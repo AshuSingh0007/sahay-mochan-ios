@@ -22,24 +22,40 @@ final class FaceLandmarkerService {
     }
 
     #if canImport(MLKitFaceDetection) && canImport(MLKitVision)
-    private lazy var detector: FaceDetector = {
-        let options = FaceDetectorOptions()
-        options.performanceMode = .fast
-        options.landmarkMode = .all
-        options.contourMode = .all
-        options.classificationMode = .all
-        options.minFaceSize = 0.15
-        return FaceDetector.faceDetector(options: options)
-    }()
+    
+    // ✅ Use Singleton pattern to avoid multiple instances
+    private var detector: FaceDetector {
+        return FaceDetectorManager.shared.detector
+    }
 
     func extractActionUnits(from image: UIImage, timestamp: TimeInterval = CACurrentMediaTime()) async throws -> AUFrame? {
         guard timestamp - lastFrameTime >= targetFrameInterval else { return nil }
         lastFrameTime = timestamp
-        let visionImage = VisionImage(image: image)
-        visionImage.orientation = image.imageOrientation
-        let faces = try detector.results(in: visionImage)
-        guard let face = faces.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else { return nil }
-        return AUFrame(timestamp: timestamp, values: Self.actionUnits(from: face))
+        
+        // ✅ Run MLKit on background thread
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                
+                let visionImage = VisionImage(image: image)
+                visionImage.orientation = image.imageOrientation
+                
+                do {
+                    let faces = try self.detector.results(in: visionImage)
+                    guard let face = faces.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    let auFrame = AUFrame(timestamp: timestamp, values: Self.actionUnits(from: face))
+                    continuation.resume(returning: auFrame)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     private static func actionUnits(from face: Face) -> [Float] {
@@ -52,13 +68,13 @@ final class FaceLandmarkerService {
         let roll = Float(face.headEulerAngleZ / 45.0)
         let yaw = Float(face.headEulerAngleY / 45.0)
 
-        // FIXED: Convert VisionPoint to CGPoint using direct properties
+        // Convert VisionPoint to CGPoint using direct properties
         let leftEye = center(points: face.contour(ofType: .leftEye)?.points.map { CGPoint(x: $0.x, y: $0.y) } ?? [])
         let rightEye = center(points: face.contour(ofType: .rightEye)?.points.map { CGPoint(x: $0.x, y: $0.y) } ?? [])
         let upperLip = center(points: face.contour(ofType: .upperLipTop)?.points.map { CGPoint(x: $0.x, y: $0.y) } ?? [])
         let lowerLip = center(points: face.contour(ofType: .lowerLipBottom)?.points.map { CGPoint(x: $0.x, y: $0.y) } ?? [])
         
-        // FIXED: Convert nose landmark position correctly
+        // Convert nose landmark position correctly
         let nosePoint: CGPoint
         if let noseLandmark = face.landmark(ofType: .noseBase)?.position {
             nosePoint = CGPoint(x: noseLandmark.x, y: noseLandmark.y)

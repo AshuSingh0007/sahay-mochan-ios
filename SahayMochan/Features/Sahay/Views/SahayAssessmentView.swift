@@ -1,21 +1,134 @@
 import SwiftUI
-import Combine
 
 struct SahayAssessmentView: View {
+    @EnvironmentObject private var auth: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = SahayViewModel()
+    @StateObject private var recorder = VideoRecorderService()
+    @State private var isCameraReady = false
+    @State private var isAssessmentActive = false
+    @State private var showResult = false
 
     var body: some View {
-        VStack(spacing: 18) {
+        ZStack(alignment: .topTrailing) {
+            MochanTheme.sageBackground.ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                if isAssessmentActive {
+                    SahayQuestionnaireView(
+                        viewModel: viewModel,
+                        onNext: advance,
+                        onFinish: finishAssessment
+                    )
+                } else {
+                    introView
+                }
+            }
+            .padding()
+
+            if isAssessmentActive || recorder.isRecording {
+                SahayCameraView(recorder: recorder)
+                    .frame(width: 120, height: 160)
+                    .padding(.top, 12)
+                    .padding(.trailing, 12)
+            }
+        }
+        .navigationTitle("Sahay")
+        .sheet(isPresented: $showResult) {
+            if let result = viewModel.result {
+                NavigationView {
+                    SahayResultView(result: result, viewModel: viewModel) {
+                        showResult = false
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .task { await prepareCamera() }
+        .onDisappear {
+            recorder.frameHandler = nil
+            recorder.stopSession()
+        }
+    }
+
+    private var introView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 44))
+                .foregroundColor(MochanTheme.purple)
             Text("Sahay Anxiety Assessment")
                 .font(.title2.bold())
                 .foregroundColor(MochanTheme.sageDark)
-            Text("Complete a brief camera-supported GAD-7 screening. Choose the answer that best matches the last two weeks.")
+            Text("Answer seven GAD-7 questions while the front camera records facial cues for AI-assisted scoring.")
+                .font(.subheadline)
                 .foregroundColor(.secondary)
-            NavigationLink("Start Camera Step") { SahayCameraView(viewModel: viewModel) }
-                .mochanButton()
+                .multilineTextAlignment(.center)
+
+            Button {
+                Task { await startAssessment() }
+            } label: {
+                Text(isCameraReady ? "Start Assessment" : "Preparing Camera...")
+            }
+            .mochanButton(disabled: !isCameraReady)
+            .disabled(!isCameraReady)
+
+            if let error = viewModel.errorMessage {
+                Text(error)
+                    .foregroundColor(MochanTheme.severe)
+                    .font(.footnote)
+            }
         }
-        .padding()
-        .background(MochanTheme.sageBackground.ignoresSafeArea())
-        .navigationTitle("Sahay")
+        .mochanCard()
+    }
+
+    private func prepareCamera() async {
+        guard await recorder.requestPermissions() else {
+            viewModel.errorMessage = "Camera permission is required for the assessment."
+            return
+        }
+
+        do {
+            try recorder.configureSession()
+            recorder.frameHandler = { sampleBuffer in
+                viewModel.processFrame(sampleBuffer)
+            }
+            recorder.startSession()
+            isCameraReady = true
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func startAssessment() async {
+        viewModel.reset()
+        showResult = false
+        recorder.frameHandler = { sampleBuffer in
+            viewModel.processFrame(sampleBuffer)
+        }
+
+        do {
+            try recorder.startRecording()
+            isAssessmentActive = true
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func advance() {
+        _ = viewModel.moveToNextQuestion()
+    }
+
+    private func finishAssessment() {
+        Task {
+            do {
+                viewModel.recordedVideoURL = try await recorder.stopRecording()
+            } catch {
+                viewModel.errorMessage = error.localizedDescription
+            }
+
+            await viewModel.complete(user: auth.currentUser)
+            isAssessmentActive = false
+            showResult = viewModel.result != nil
+        }
     }
 }

@@ -60,6 +60,7 @@ PODS:
   - TensorFlowLiteC (2.13.0):
     - TensorFlowLiteC/Core (= 2.13.0)
   - TensorFlowLiteC/Core (2.13.0)
+  - TensorFlowLiteSelectTfOps (2.13.0)
   - TensorFlowLiteSwift (2.13.0):
     - TensorFlowLiteSwift/Core (= 2.13.0)
   - TensorFlowLiteSwift/Core (2.13.0):
@@ -67,6 +68,7 @@ PODS:
 
 DEPENDENCIES:
   - GoogleMLKit/FaceDetection (~> 4.0.0)
+  - TensorFlowLiteSelectTfOps (~> 2.13.0)
   - TensorFlowLiteSwift (~> 2.13.0)
 
 SPEC REPOS:
@@ -84,6 +86,7 @@ SPEC REPOS:
     - nanopb
     - PromisesObjC
     - TensorFlowLiteC
+    - TensorFlowLiteSelectTfOps
     - TensorFlowLiteSwift
 
 SPEC CHECKSUMS:
@@ -100,8 +103,9 @@ SPEC CHECKSUMS:
   nanopb: 438bc412db1928dac798aa6fd75726007be04262
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   TensorFlowLiteC: ac3334fa9dbc90e4744b4497312a393fd02b5408
+  TensorFlowLiteSelectTfOps: 26b720e421f50e4d41b241c70c63e65ba04d76b4
   TensorFlowLiteSwift: 1d8320fbf292054eb50ef0b347a4b17a92b49731
 
-PODFILE CHECKSUM: f1c3b1bfdea9ae5d83e5736f3973e041b5f50bdf
+PODFILE CHECKSUM: 811c20b76c92cc39fe3fc1283ab982fc70e7a366
 
 COCOAPODS: 1.16.2

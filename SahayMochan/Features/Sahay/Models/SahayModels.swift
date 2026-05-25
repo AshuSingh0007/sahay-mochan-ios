@@ -17,11 +17,6 @@ enum GAD7 {
     ]
 }
 
-struct AUFrame: Codable, Identifiable {
-    var id = UUID()
-    let timestamp: TimeInterval
-    let values: [Float]
-}
 
 enum AUFeatureSet {
     static let canonicalFeatures = [

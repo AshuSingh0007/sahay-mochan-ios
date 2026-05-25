@@ -22,9 +22,7 @@ final class AuthViewModel: ObservableObject {
             let response: LoginResponse = try await api.request(.login, body: LoginRequest(registrationID: registrationID, password: password))
             try validateAuthResponse(success: response.success, message: response.message)
             if let token = response.token { KeychainManager.shared.token = token }
-            let user = makeUser(from: response, fallbackRegistrationID: registrationID)
-            UserPreferences.shared.currentUser = user
-            currentUser = user
+            saveAuthenticatedUser(makeUser(from: response, fallbackRegistrationID: registrationID))
         }
     }
 
@@ -33,9 +31,7 @@ final class AuthViewModel: ObservableObject {
             let response = try await api.register(request)
             try validateAuthResponse(success: response.success, message: response.message)
             if let token = response.token { KeychainManager.shared.token = token }
-            let user = makeUser(from: response, request: request)
-            UserPreferences.shared.currentUser = user
-            currentUser = user
+            saveAuthenticatedUser(makeUser(from: response, request: request))
         }
     }
 
@@ -81,22 +77,28 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    private func saveAuthenticatedUser(_ user: User) {
+        UserPreferences.shared.currentUser = user
+        currentUser = user
+    }
+
     private func makeUser(from response: LoginResponse, fallbackRegistrationID: String) -> User {
         let responseUser = response.user
-        let registrationID = nonEmpty(responseUser?.registrationID) ?? nonEmpty(response.registrationID) ?? fallbackRegistrationID
+        let cachedUser = cachedUser(matching: fallbackRegistrationID, responseRegistrationID: responseUser?.registrationID ?? response.registrationID)
+        let registrationID = nonEmpty(responseUser?.registrationID) ?? nonEmpty(response.registrationID) ?? cachedUser?.registrationID ?? fallbackRegistrationID
 
         return User(
-            userID: responseUser?.userID ?? response.userID,
+            userID: nonEmpty(responseUser?.userID) ?? nonEmpty(response.userID) ?? cachedUser?.userID,
             registrationID: registrationID,
-            name: responseUser?.name.isEmpty == false ? responseUser?.name ?? "" : "SahayMochan User",
-            email: responseUser?.email ?? "",
-            age: responseUser?.age ?? 18,
-            gender: responseUser?.gender ?? "",
-            phone: responseUser?.phone ?? "",
-            parentName: responseUser?.parentName,
-            parentEmail: responseUser?.parentEmail,
-            isUnderage: responseUser?.isUnderage ?? false,
-            anonymousID: responseUser?.anonymousID ?? UUID().uuidString
+            name: nonEmpty(responseUser?.name) ?? nonEmpty(response.name) ?? cachedUser?.name ?? "",
+            email: nonEmpty(responseUser?.email) ?? nonEmpty(response.email) ?? cachedUser?.email ?? "",
+            age: validAge(responseUser?.age) ?? validAge(response.age) ?? validAge(cachedUser?.age) ?? 0,
+            gender: nonEmpty(responseUser?.gender) ?? nonEmpty(response.gender) ?? cachedUser?.gender ?? "",
+            phone: nonEmpty(responseUser?.phone) ?? nonEmpty(response.phoneNo) ?? cachedUser?.phone ?? "",
+            parentName: nonEmpty(responseUser?.parentName) ?? cachedUser?.parentName,
+            parentEmail: nonEmpty(responseUser?.parentEmail) ?? cachedUser?.parentEmail,
+            isUnderage: responseUser?.isUnderage ?? cachedUser?.isUnderage ?? false,
+            anonymousID: nonEmpty(responseUser?.anonymousID) ?? cachedUser?.anonymousID ?? UUID().uuidString
         )
     }
 
@@ -105,22 +107,34 @@ final class AuthViewModel: ObservableObject {
         let registrationID = nonEmpty(responseUser?.registrationID) ?? nonEmpty(response.registrationID) ?? request.registrationID
 
         return User(
-            userID: responseUser?.userID ?? response.userID,
+            userID: nonEmpty(responseUser?.userID) ?? nonEmpty(response.userID),
             registrationID: registrationID,
-            name: responseUser?.name.isEmpty == false ? responseUser?.name ?? "" : request.name,
-            email: responseUser?.email.isEmpty == false ? responseUser?.email ?? "" : request.email,
-            age: responseUser?.age == 0 ? request.age : responseUser?.age ?? request.age,
-            gender: responseUser?.gender.isEmpty == false ? responseUser?.gender ?? "" : request.gender,
-            phone: responseUser?.phone.isEmpty == false ? responseUser?.phone ?? "" : request.phoneNo,
-            parentName: responseUser?.parentName ?? (request.parentName.isEmpty ? nil : request.parentName),
-            parentEmail: responseUser?.parentEmail ?? (request.parentEmail.isEmpty ? nil : request.parentEmail),
+            name: nonEmpty(responseUser?.name) ?? nonEmpty(response.name) ?? request.name,
+            email: nonEmpty(responseUser?.email) ?? nonEmpty(response.email) ?? request.email,
+            age: validAge(responseUser?.age) ?? validAge(response.age) ?? request.age,
+            gender: nonEmpty(responseUser?.gender) ?? nonEmpty(response.gender) ?? request.gender,
+            phone: nonEmpty(responseUser?.phone) ?? nonEmpty(response.phoneNo) ?? request.phoneNo,
+            parentName: nonEmpty(responseUser?.parentName) ?? nonEmpty(request.parentName),
+            parentEmail: nonEmpty(responseUser?.parentEmail) ?? nonEmpty(request.parentEmail),
             isUnderage: responseUser?.isUnderage ?? request.isUnderage,
-            anonymousID: responseUser?.anonymousID ?? UUID().uuidString
+            anonymousID: nonEmpty(responseUser?.anonymousID) ?? UUID().uuidString
         )
     }
 
+    private func cachedUser(matching loginRegistrationID: String, responseRegistrationID: String?) -> User? {
+        guard let cached = UserPreferences.shared.currentUser else { return nil }
+        let candidates = [loginRegistrationID, responseRegistrationID].compactMap(nonEmpty)
+        guard candidates.contains(cached.registrationID) else { return nil }
+        return cached
+    }
+
+    private func validAge(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return value
+    }
+
     private func nonEmpty(_ value: String?) -> String? {
-        guard let value, !value.isEmpty else { return nil }
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
         return value
     }
 }

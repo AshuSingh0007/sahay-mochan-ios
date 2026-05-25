@@ -32,33 +32,93 @@ struct RegisterRequest: Codable {
     }
 }
 
-struct LoginResponse: Codable {
+struct LoginResponse: Decodable {
     var success: Bool? = nil
     var message: String? = nil
     var user: User? = nil
     var registrationID: String? = nil
     var userID: String? = nil
     var token: String? = nil
+    var name: String? = nil
+    var email: String? = nil
+    var age: Int? = nil
+    var gender: String? = nil
+    var phoneNo: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case success, message, user, token
+        case success, message, user, token, name, email, age, gender, data, student, profile
         case registrationID = "registration_id"
         case userID = "user_id"
+        case phoneNo = "phone_no"
+        case phone
+        case phoneNumber = "phone_number"
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = try container.decodeIfPresent(Bool.self, forKey: .success)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        token = try container.decodeIfPresent(String.self, forKey: .token)
+        user = try container.decodeIfPresent(User.self, forKey: .user)
+            ?? container.decodeIfPresent(User.self, forKey: .data)
+            ?? container.decodeIfPresent(User.self, forKey: .student)
+            ?? container.decodeIfPresent(User.self, forKey: .profile)
+        registrationID = try container.decodeIfPresent(String.self, forKey: .registrationID)
+        userID = try container.decodeIfPresent(String.self, forKey: .userID)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        age = try container.decodeIfPresent(Int.self, forKey: .age)
+        gender = try container.decodeIfPresent(String.self, forKey: .gender)
+        phoneNo = try container.decodeIfPresent(String.self, forKey: .phoneNo)
+            ?? container.decodeIfPresent(String.self, forKey: .phone)
+            ?? container.decodeIfPresent(String.self, forKey: .phoneNumber)
     }
 }
 
-struct RegisterResponse: Codable {
+struct RegisterResponse: Decodable {
     var success: Bool? = nil
     var message: String? = nil
     var user: User? = nil
     var registrationID: String? = nil
     var userID: String? = nil
     var token: String? = nil
+    var name: String? = nil
+    var email: String? = nil
+    var age: Int? = nil
+    var gender: String? = nil
+    var phoneNo: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case success, message, user, token
+        case success, message, user, token, name, email, age, gender, data, student, profile
         case registrationID = "registration_id"
         case userID = "user_id"
+        case phoneNo = "phone_no"
+        case phone
+        case phoneNumber = "phone_number"
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = try container.decodeIfPresent(Bool.self, forKey: .success)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        token = try container.decodeIfPresent(String.self, forKey: .token)
+        user = try container.decodeIfPresent(User.self, forKey: .user)
+            ?? container.decodeIfPresent(User.self, forKey: .data)
+            ?? container.decodeIfPresent(User.self, forKey: .student)
+            ?? container.decodeIfPresent(User.self, forKey: .profile)
+        registrationID = try container.decodeIfPresent(String.self, forKey: .registrationID)
+        userID = try container.decodeIfPresent(String.self, forKey: .userID)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        age = try container.decodeIfPresent(Int.self, forKey: .age)
+        gender = try container.decodeIfPresent(String.self, forKey: .gender)
+        phoneNo = try container.decodeIfPresent(String.self, forKey: .phoneNo)
+            ?? container.decodeIfPresent(String.self, forKey: .phone)
+            ?? container.decodeIfPresent(String.self, forKey: .phoneNumber)
     }
 }
 
