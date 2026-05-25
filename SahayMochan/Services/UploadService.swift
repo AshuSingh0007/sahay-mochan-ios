@@ -5,6 +5,17 @@ extension Notification.Name {
 }
 
 final class UploadService {
+    enum UploadError: LocalizedError {
+        case missingVideo
+
+        var errorDescription: String? {
+            switch self {
+            case .missingVideo:
+                return "Recorded video is required before uploading this assessment."
+            }
+        }
+    }
+
     static let shared = UploadService()
 
     func useTrialAndUpload(user: User, result: AssessmentResult) async throws {
@@ -14,6 +25,10 @@ final class UploadService {
     }
 
     func uploadAssessment(user: User, result: AssessmentResult) async throws -> APIMessageResponse {
+        guard let videoURL = result.videoURL else {
+            throw UploadError.missingVideo
+        }
+
         var fields: [String: String] = [
             "registration_id": user.registrationID
         ]
@@ -25,14 +40,11 @@ final class UploadService {
             fields["phq_score"] = "\(result.score)"
         }
 
-        var files = [
+        let files = [
+            MultipartFile(fieldName: "video", fileName: videoURL.lastPathComponent, mimeType: videoMimeType(for: videoURL), url: videoURL),
             MultipartFile(fieldName: "au_csv", fileName: result.auCSVURL.lastPathComponent, mimeType: "text/csv", url: result.auCSVURL),
             MultipartFile(fieldName: questionnaireFieldName(for: result.type), fileName: result.questionnaireCSVURL.lastPathComponent, mimeType: "text/csv", url: result.questionnaireCSVURL)
         ]
-
-        if let videoURL = result.videoURL {
-            files.append(MultipartFile(fieldName: "video", fileName: videoURL.lastPathComponent, mimeType: videoMimeType(for: videoURL), url: videoURL))
-        }
 
         return try await APIClient.shared.uploadMultipart(endpoint: .uploadAssessment, fields: fields, files: files)
     }

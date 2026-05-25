@@ -58,8 +58,8 @@ struct SahayQuestionnaireView: View {
             }
             .mochanCard()
 
-            if let aiScore = viewModel.liveAIScore {
-                Text("Live AI score: \(aiScore, specifier: "%.1f") / 21")
+            if viewModel.liveAIScore != nil {
+                Text("AI analysis is active")
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }

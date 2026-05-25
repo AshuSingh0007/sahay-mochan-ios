@@ -9,12 +9,16 @@ final class AuthViewModel: ObservableObject {
     @Published var infoMessage: String?
 
     private let api: APIClient
+    private let storageKey = "currentUser"
 
     var isAuthenticated: Bool { currentUser != nil }
 
     init(api: APIClient? = nil) {
         self.api = api ?? APIClient.shared
-        currentUser = UserPreferences.shared.currentUser
+        loadUserFromStorage()
+        if currentUser == nil {
+            currentUser = UserPreferences.shared.currentUser
+        }
     }
 
     func login(registrationID: String, password: String) async {
@@ -54,6 +58,7 @@ final class AuthViewModel: ObservableObject {
     }
 
     func logout() {
+        UserDefaults.standard.removeObject(forKey: storageKey)
         UserPreferences.shared.clearSession()
         currentUser = nil
     }
@@ -78,7 +83,19 @@ final class AuthViewModel: ObservableObject {
     }
 
     private func saveAuthenticatedUser(_ user: User) {
+        currentUser = user
         UserPreferences.shared.currentUser = user
+        saveUserToStorage()
+    }
+
+    private func saveUserToStorage() {
+        guard let currentUser, let encoded = try? JSONEncoder().encode(currentUser) else { return }
+        UserDefaults.standard.set(encoded, forKey: storageKey)
+    }
+
+    private func loadUserFromStorage() {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let user = try? JSONDecoder().decode(User.self, from: data) else { return }
         currentUser = user
     }
 
@@ -90,7 +107,7 @@ final class AuthViewModel: ObservableObject {
         return User(
             userID: nonEmpty(responseUser?.userID) ?? nonEmpty(response.userID) ?? cachedUser?.userID,
             registrationID: registrationID,
-            name: nonEmpty(responseUser?.name) ?? nonEmpty(response.name) ?? cachedUser?.name ?? "",
+            name: realName(responseUser?.name) ?? realName(response.name) ?? realName(cachedUser?.name) ?? "",
             email: nonEmpty(responseUser?.email) ?? nonEmpty(response.email) ?? cachedUser?.email ?? "",
             age: validAge(responseUser?.age) ?? validAge(response.age) ?? validAge(cachedUser?.age) ?? 0,
             gender: nonEmpty(responseUser?.gender) ?? nonEmpty(response.gender) ?? cachedUser?.gender ?? "",
@@ -109,7 +126,7 @@ final class AuthViewModel: ObservableObject {
         return User(
             userID: nonEmpty(responseUser?.userID) ?? nonEmpty(response.userID),
             registrationID: registrationID,
-            name: nonEmpty(responseUser?.name) ?? nonEmpty(response.name) ?? request.name,
+            name: realName(responseUser?.name) ?? realName(response.name) ?? realName(request.name) ?? "",
             email: nonEmpty(responseUser?.email) ?? nonEmpty(response.email) ?? request.email,
             age: validAge(responseUser?.age) ?? validAge(response.age) ?? request.age,
             gender: nonEmpty(responseUser?.gender) ?? nonEmpty(response.gender) ?? request.gender,
@@ -130,6 +147,13 @@ final class AuthViewModel: ObservableObject {
 
     private func validAge(_ value: Int?) -> Int? {
         guard let value, value > 0 else { return nil }
+        return value
+    }
+
+    private func realName(_ value: String?) -> String? {
+        guard let value = nonEmpty(value) else { return nil }
+        let normalized = value.replacingOccurrences(of: " ", with: "").lowercased()
+        guard normalized != "sahaymochanuser" else { return nil }
         return value
     }
 

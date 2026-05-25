@@ -7,6 +7,7 @@ final class DepressionModel {
     private let modelName = "best_bilstm_transformer_model"
     private var actualSpec: ModelTensorSpec?
 
+    
     func predict(questionnaireScore: Int, auFrames: [AUFrame]) -> Double {
         do {
             let rawOutput = try runModel(questionnaireScore: questionnaireScore, auFrames: auFrames)
@@ -72,10 +73,14 @@ final class DepressionModel {
 
         let inputSpec = try sequenceSpec(from: inputTensor.shape.dimensions)
 
+        let featureCount = min(inputSpec.featureCount, 17)
+        let slicedFrames = auFrames.map { frame in
+            AUFrame(timestamp: frame.timestamp, values: Array(frame.values.prefix(17)))
+        }
         let inputValues = try AUSequencePreprocessor.input(
-            frames: auFrames,
+            frames: slicedFrames,
             targetLength: inputSpec.sequenceLength,
-            featureCount: inputSpec.featureCount
+            featureCount: featureCount
         )
         try interpreter.copy(inputValues.tensorData(), toInputAt: 0)
         try copyAdditionalInputs(questionnaireScore: questionnaireScore, interpreter: interpreter)

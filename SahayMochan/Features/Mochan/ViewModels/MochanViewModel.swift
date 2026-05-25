@@ -97,6 +97,11 @@ final class MochanViewModel: ObservableObject {
             return
         }
 
+        guard result.videoURL != nil else {
+            errorMessage = "Recorded video is missing. Please retake the assessment before uploading."
+            return
+        }
+
         isUploading = true
         uploadProgress = 0.15
         uploadMessage = nil

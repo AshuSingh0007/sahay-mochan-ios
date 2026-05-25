@@ -73,10 +73,9 @@ final class SahayViewModel: ObservableObject {
                     AnxietyModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
                 }.value
             }
-            let combinedScore = Int(((Double(questionnaireScore) + aiScore) / 2.0).rounded())
             let auCSV = try CSVExportService.writeAUCSV(frames: frames, prefix: "sahay_au")
             let gadCSV = try CSVExportService.writeQuestionnaireCSV(type: .anxiety, responses: responses, prefix: "gad7")
-            result = AssessmentResult(type: .anxiety, score: score, severity: .anxiety(score: combinedScore), aiScore: aiScore, videoURL: recordedVideoURL, auCSVURL: auCSV, questionnaireCSVURL: gadCSV)
+            result = AssessmentResult(type: .anxiety, score: questionnaireScore, severity: .anxiety(score: questionnaireScore), aiScore: aiScore, videoURL: recordedVideoURL, auCSVURL: auCSV, questionnaireCSVURL: gadCSV)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -86,6 +85,11 @@ final class SahayViewModel: ObservableObject {
     func uploadResult(user: User?) async {
         guard let user, let result else {
             errorMessage = "A signed-in user and completed result are required before upload."
+            return
+        }
+
+        guard result.videoURL != nil else {
+            errorMessage = "Recorded video is missing. Please retake the assessment before uploading."
             return
         }
 

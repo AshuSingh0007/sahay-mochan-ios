@@ -7,20 +7,16 @@ struct MochanResultView: View {
     @ObservedObject var viewModel: MochanViewModel
     var onReturnHome: (() -> Void)? = nil
 
-    private var aiScore: Double { result.aiScore ?? Double(result.score) }
+    private var questionnaireLevel: Severity { .depression(score: result.score) }
+    private var aiLevel: Severity { .depression(score: Int((result.aiScore ?? Double(result.score)).rounded())) }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                scoreSummary
+                levelSummary
                 careSuggestions
                 uploadPanel
                 returnHomeButton
-
-                Text("Generated files: \(result.auCSVURL.lastPathComponent), \(result.questionnaireCSVURL.lastPathComponent)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
         }
@@ -28,24 +24,16 @@ struct MochanResultView: View {
         .navigationTitle("Mochan Result")
     }
 
-    private var scoreSummary: some View {
+    private var levelSummary: some View {
         VStack(spacing: 12) {
             Text("PHQ-9 Depression Result")
                 .font(.headline)
                 .foregroundColor(MochanTheme.sageDark)
 
             HStack(spacing: 12) {
-                scoreTile("Questionnaire", "\(result.score) / 27")
-                scoreTile("AI score", "\(String(format: "%.1f", aiScore)) / 27")
+                levelTile("Questionnaire Level", questionnaireLevel)
+                levelTile("AI Analysis Level", aiLevel)
             }
-
-            Text(result.severity.rawValue)
-                .font(.headline)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(result.severity.color.opacity(0.18))
-                .foregroundColor(result.severity.color)
-                .cornerRadius(8)
         }
         .frame(maxWidth: .infinity)
         .mochanCard()
@@ -110,14 +98,19 @@ struct MochanResultView: View {
         .mochanButton()
     }
 
-    private func scoreTile(_ title: String, _ value: String) -> some View {
-        VStack(spacing: 6) {
+    private func levelTile(_ title: String, _ severity: Severity) -> some View {
+        VStack(spacing: 8) {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
-            Text(value)
+                .multilineTextAlignment(.center)
+            Text(severity.rawValue)
                 .font(.headline)
-                .foregroundColor(MochanTheme.sageDark)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(severity.color.opacity(0.18))
+                .foregroundColor(severity.color)
+                .cornerRadius(8)
         }
         .frame(maxWidth: .infinity)
         .padding(12)

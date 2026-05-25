@@ -61,6 +61,8 @@ struct ProfileView: View {
 
     private func display(_ value: String?, fallback: String = "--") -> String {
         guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return fallback }
+        let normalized = value.replacingOccurrences(of: " ", with: "").lowercased()
+        guard normalized != "sahaymochanuser" else { return fallback }
         return value
     }
 }

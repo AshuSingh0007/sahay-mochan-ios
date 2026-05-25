@@ -7,26 +7,16 @@ struct SahayResultView: View {
     @ObservedObject var viewModel: SahayViewModel
     var onReturnHome: (() -> Void)? = nil
 
-    private var aiScore: Double { result.aiScore ?? Double(result.score) }
-    private var combinedScore: Int { Int(((Double(result.score) + aiScore) / 2.0).rounded()) }
-    private var combinedSeverity: Severity { .anxiety(score: combinedScore) }
+    private var questionnaireLevel: Severity { .anxiety(score: result.score) }
+    private var aiLevel: Severity { .anxiety(score: Int((result.aiScore ?? Double(result.score)).rounded())) }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                scoreSummary
+                levelSummary
                 recommendations
-
-                AnxietyHeatmap(values: (0..<36).map { Double(($0 + combinedScore) % 10) / 10.0 })
-                    .mochanCard()
-
                 uploadPanel
                 returnHomeButton
-
-                Text("Generated files: \(result.auCSVURL.lastPathComponent), \(result.questionnaireCSVURL.lastPathComponent)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding()
         }
@@ -34,28 +24,15 @@ struct SahayResultView: View {
         .navigationTitle("Sahay Result")
     }
 
-    private var scoreSummary: some View {
+    private var levelSummary: some View {
         VStack(spacing: 12) {
             Text("GAD-7 Anxiety Result")
                 .font(.headline)
                 .foregroundColor(MochanTheme.sageDark)
 
             HStack(spacing: 12) {
-                scoreTile("Questionnaire", "\(result.score) / 21")
-                scoreTile("AI score", "\(String(format: "%.1f", aiScore)) / 21")
-            }
-
-            VStack(spacing: 6) {
-                Text("Combined score: \(combinedScore) / 21")
-                    .font(.title3.bold())
-                    .foregroundColor(MochanTheme.sageDark)
-                Text(combinedSeverity.rawValue)
-                    .font(.headline)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(combinedSeverity.color.opacity(0.18))
-                    .foregroundColor(combinedSeverity.color)
-                    .cornerRadius(8)
+                levelTile("Questionnaire Level", questionnaireLevel)
+                levelTile("AI Analysis Level", aiLevel)
             }
         }
         .frame(maxWidth: .infinity)
@@ -128,14 +105,19 @@ struct SahayResultView: View {
         .mochanButton()
     }
 
-    private func scoreTile(_ title: String, _ value: String) -> some View {
-        VStack(spacing: 6) {
+    private func levelTile(_ title: String, _ severity: Severity) -> some View {
+        VStack(spacing: 8) {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
-            Text(value)
+                .multilineTextAlignment(.center)
+            Text(severity.rawValue)
                 .font(.headline)
-                .foregroundColor(MochanTheme.sageDark)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(severity.color.opacity(0.18))
+                .foregroundColor(severity.color)
+                .cornerRadius(8)
         }
         .frame(maxWidth: .infinity)
         .padding(12)
@@ -144,7 +126,7 @@ struct SahayResultView: View {
     }
 
     private var recommendationLines: [String] {
-        switch combinedSeverity {
+        switch questionnaireLevel {
         case .mild:
             return [
                 "Continue daily check-ins, sleep tracking, and regular movement.",
@@ -167,24 +149,25 @@ struct SahayResultView: View {
 struct ResultHeader: View {
     let result: AssessmentResult
 
+    private var questionnaireLevel: Severity {
+        result.type == .anxiety ? .anxiety(score: result.score) : .depression(score: result.score)
+    }
+
+    private var aiLevel: Severity {
+        let score = Int((result.aiScore ?? Double(result.score)).rounded())
+        return result.type == .anxiety ? .anxiety(score: score) : .depression(score: score)
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             Text(result.type.questionnaireName)
                 .font(.headline)
-            Text("\(result.score) / \(result.type.maxScore)")
-                .font(.largeTitle.bold())
-                .foregroundColor(MochanTheme.sageDark)
-            Text(result.severity.rawValue)
+            Text("Questionnaire Level: \(questionnaireLevel.rawValue)")
                 .font(.headline)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(result.severity.color.opacity(0.18))
-                .foregroundColor(result.severity.color)
-                .cornerRadius(8)
-            if let aiScore = result.aiScore {
-                Text("AI score: \(String(format: "%.1f", aiScore))")
-                    .foregroundColor(.secondary)
-            }
+                .foregroundColor(questionnaireLevel.color)
+            Text("AI Analysis Level: \(aiLevel.rawValue)")
+                .font(.headline)
+                .foregroundColor(aiLevel.color)
         }
         .frame(maxWidth: .infinity)
         .mochanCard()
