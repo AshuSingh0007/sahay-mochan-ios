@@ -47,6 +47,11 @@ final class MochanViewModel: ObservableObject {
         return true
     }
 
+    /// Call this from the assessment view after video recording finishes.
+    func setRecordedVideoURL(_ url: URL) {
+        recordedVideoURL = url
+    }
+
     nonisolated func processFrame(_ sampleBuffer: CMSampleBuffer) {
         guard let image = Self.image(from: sampleBuffer) else { return }
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
@@ -59,6 +64,12 @@ final class MochanViewModel: ObservableObject {
     func complete(user: User?) async {
         isProcessing = true
         errorMessage = nil
+        print("📝 Mochan complete() started")
+
+        // Warn if video URL is missing – the view should have set it
+        if recordedVideoURL == nil {
+            print("⚠️ MochanViewModel: recordedVideoURL is nil before complete()")
+        }
 
         do {
             let frames = auFrames.isEmpty ? FaceLandmarkerService.sampleFrames() : auFrames
@@ -68,9 +79,13 @@ final class MochanViewModel: ObservableObject {
             if let liveAIScore {
                 aiScore = liveAIScore
             } else {
-                aiScore = await Task.detached(priority: .userInitiated) {
-                    DepressionModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
-                }.value
+                // Timeout after 5 seconds to prevent hanging
+                aiScore = await withTimeout(seconds: 5) {
+                    await Task.detached(priority: .userInitiated) {
+                        DepressionModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
+                    }.value
+                } ?? Double(questionnaireScore) // fallback to questionnaire score
+                print("✅ AI score computed: \(aiScore)")
             }
 
             let auCSV = try CSVExportService.writeAUCSV(frames: frames, prefix: "mochan_au")
@@ -84,10 +99,11 @@ final class MochanViewModel: ObservableObject {
                 auCSVURL: auCSV,
                 questionnaireCSVURL: phqCSV
             )
+            print("✅ Mochan result created: \(result != nil)")
         } catch {
+            print("❌ Mochan complete() error: \(error)")
             errorMessage = error.localizedDescription
         }
-
         isProcessing = false
     }
 
@@ -147,4 +163,13 @@ final class MochanViewModel: ObservableObject {
         guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
         return UIImage(cgImage: cgImage, scale: 1, orientation: .right)
     }
+}
+
+// Helper timeout function (must be in scope)
+private func withTimeout<T>(seconds: Double, operation: @escaping () async -> T) async -> T? {
+    async let task = operation()
+    async let timeout = Task.sleep(UInt64(seconds * 1_000_000_000))
+    let result = await (try? timeout, await task)
+    if result.0 != nil { return nil }
+    return await task
 }

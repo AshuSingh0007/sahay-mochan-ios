@@ -108,9 +108,10 @@ struct SahayAssessmentView: View {
 
         do {
             try recorder.startRecording()
+            print("✅ Sahay recording started, isRecording = \(recorder.isRecording)")
             isAssessmentActive = true
         } catch {
-            viewModel.errorMessage = error.localizedDescription
+            viewModel.errorMessage = "Failed to start recording: \(error.localizedDescription)"
         }
     }
 
@@ -120,10 +121,51 @@ struct SahayAssessmentView: View {
 
     private func finishAssessment() {
         Task {
-            do {
-                viewModel.recordedVideoURL = try await recorder.stopRecording()
-            } catch {
-                viewModel.errorMessage = error.localizedDescription
+            var videoURL: URL?
+            var recordingError: Error?
+
+            // Stop recording only if it was actually started
+            if recorder.isRecording {
+                do {
+                    videoURL = try await recorder.stopRecording()
+                    print("✅ Sahay video recorded at: \(videoURL?.path ?? "nil")")
+
+                    // Verify the file exists on disk
+                    if let url = videoURL, FileManager.default.fileExists(atPath: url.path) {
+                        print("✅ Video file exists at: \(url)")
+                    } else {
+                        print("❌ Video file missing after stopRecording!")
+                        recordingError = NSError(domain: "VideoRecorder", code: -1, userInfo: [NSLocalizedDescriptionKey: "Video file not saved"])
+                        viewModel.errorMessage = "Video file was not saved. Please retake the assessment."
+                    }
+                } catch {
+                    print("❌ Sahay stopRecording error: \(error)")
+                    recordingError = error
+                    viewModel.errorMessage = error.localizedDescription
+                    // Try to use last recorded URL as fallback
+                    if let lastURL = recorder.lastRecordedURL, FileManager.default.fileExists(atPath: lastURL.path) {
+                        videoURL = lastURL
+                        print("⚠️ Using lastRecordedURL: \(lastURL.path)")
+                    }
+                }
+            } else {
+                // No active recording – try to use last recorded URL
+                if let lastURL = recorder.lastRecordedURL, FileManager.default.fileExists(atPath: lastURL.path) {
+                    videoURL = lastURL
+                    print("⚠️ No active recording, using lastRecordedURL: \(lastURL.path)")
+                } else {
+                    print("❌ No active recording and no valid lastRecordedURL")
+                    viewModel.errorMessage = "No recording was active. Please retake the assessment."
+                }
+            }
+
+            if let videoURL {
+                viewModel.setRecordedVideoURL(videoURL)
+            } else {
+                // Still nil – ensure error is shown
+                if viewModel.errorMessage == nil {
+                    viewModel.errorMessage = "Video recording failed. Please retake assessment."
+                }
             }
 
             await viewModel.complete(user: auth.currentUser)

@@ -1,17 +1,22 @@
 import Foundation
 
-extension Notification.Name {
-    static let assessmentDidUpload = Notification.Name("assessmentDidUpload")
-}
-
 final class UploadService {
     enum UploadError: LocalizedError {
         case missingVideo
+        case videoFileNotFound
+        case missingCSVFile(String)
+        case invalidResponse
 
         var errorDescription: String? {
             switch self {
             case .missingVideo:
                 return "Recorded video is required before uploading this assessment."
+            case .videoFileNotFound:
+                return "The recorded video file could not be found on disk."
+            case .missingCSVFile(let name):
+                return "Required CSV file (\(name)) is missing."
+            case .invalidResponse:
+                return "The server returned an invalid response."
             }
         }
     }
@@ -27,6 +32,19 @@ final class UploadService {
     func uploadAssessment(user: User, result: AssessmentResult) async throws -> APIMessageResponse {
         guard let videoURL = result.videoURL else {
             throw UploadError.missingVideo
+        }
+
+        // Verify video file exists
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            throw UploadError.videoFileNotFound
+        }
+
+        // Verify CSV files exist
+        guard FileManager.default.fileExists(atPath: result.auCSVURL.path) else {
+            throw UploadError.missingCSVFile(result.auCSVURL.lastPathComponent)
+        }
+        guard FileManager.default.fileExists(atPath: result.questionnaireCSVURL.path) else {
+            throw UploadError.missingCSVFile(result.questionnaireCSVURL.lastPathComponent)
         }
 
         var fields: [String: String] = [
@@ -46,7 +64,16 @@ final class UploadService {
             MultipartFile(fieldName: questionnaireFieldName(for: result.type), fileName: result.questionnaireCSVURL.lastPathComponent, mimeType: "text/csv", url: result.questionnaireCSVURL)
         ]
 
-        return try await APIClient.shared.uploadMultipart(endpoint: .uploadAssessment, fields: fields, files: files)
+        // Log upload attempt
+        print("📤 Uploading assessment: type=\(result.type.rawValue), score=\(result.score), files=\(files.map { $0.fieldName })")
+        do {
+            let response = try await APIClient.shared.uploadMultipart(endpoint: .uploadAssessment, fields: fields, files: files)
+            print("✅ Upload successful: \(response.message ?? "OK")")
+            return response
+        } catch {
+            print("❌ Upload failed: \(error.localizedDescription)")
+            throw error
+        }
     }
 
     func upload(user: User, result: AssessmentResult) async throws -> APIMessageResponse {
@@ -69,6 +96,7 @@ final class UploadService {
     }
 }
 
+// MARK: - CSV Export Service (unchanged)
 enum CSVExportService {
     static func writeAUCSV(frames: [AUFrame], prefix: String) throws -> URL {
         let featureCount = AUFrame.featureCount

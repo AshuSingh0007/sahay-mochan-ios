@@ -48,12 +48,16 @@ final class SahayViewModel: ObservableObject {
         return true
     }
 
-    // ✅ Called from VideoRecorderService on background thread
+    /// Call this from the assessment view after video recording finishes.
+    func setRecordedVideoURL(_ url: URL) {
+        recordedVideoURL = url
+    }
+
+    // Called from VideoRecorderService on background thread
     nonisolated func processFrame(_ sampleBuffer: CMSampleBuffer) {
         guard let image = Self.image(from: sampleBuffer) else { return }
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds
         
-        // ✅ Create a Task that runs on MainActor for UI updates
         Task { @MainActor in
             await self.processImageFrame(image, timestamp: timestamp)
         }
@@ -62,20 +66,39 @@ final class SahayViewModel: ObservableObject {
     func complete(user: User?) async {
         isProcessing = true
         errorMessage = nil
+        
+        // Warn if video URL is missing – the view should have set it
+        if recordedVideoURL == nil {
+            print("⚠️ SahayViewModel: recordedVideoURL is nil before complete()")
+        }
+        
         do {
             let frames = auFrames.isEmpty ? FaceLandmarkerService.sampleFrames() : auFrames
             let questionnaireScore = score
             let aiScore: Double
+            
             if let liveAIScore {
                 aiScore = liveAIScore
             } else {
-                aiScore = await Task.detached(priority: .userInitiated) {
-                    AnxietyModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
-                }.value
+                // Add timeout to prevent hanging (max 5 seconds)
+                aiScore = await withTimeout(seconds: 5) {
+                    await Task.detached(priority: .userInitiated) {
+                        AnxietyModel().predict(questionnaireScore: questionnaireScore, auFrames: frames)
+                    }.value
+                } ?? Double(questionnaireScore) // fallback to questionnaire score
             }
+            
             let auCSV = try CSVExportService.writeAUCSV(frames: frames, prefix: "sahay_au")
             let gadCSV = try CSVExportService.writeQuestionnaireCSV(type: .anxiety, responses: responses, prefix: "gad7")
-            result = AssessmentResult(type: .anxiety, score: questionnaireScore, severity: .anxiety(score: questionnaireScore), aiScore: aiScore, videoURL: recordedVideoURL, auCSVURL: auCSV, questionnaireCSVURL: gadCSV)
+            result = AssessmentResult(
+                type: .anxiety,
+                score: questionnaireScore,
+                severity: .anxiety(score: questionnaireScore),
+                aiScore: aiScore,
+                videoURL: recordedVideoURL,
+                auCSVURL: auCSV,
+                questionnaireCSVURL: gadCSV
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -111,7 +134,6 @@ final class SahayViewModel: ObservableObject {
         isUploading = false
     }
 
-    // ✅ Runs on MainActor, but calls MLKit on background (now fixed in FaceLandmarkerService)
     private func processImageFrame(_ image: UIImage, timestamp: TimeInterval) async {
         frameCounter += 1
         guard frameCounter % 10 == 0, !isAnalyzingFrame else { return }
@@ -139,4 +161,17 @@ final class SahayViewModel: ObservableObject {
         guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
         return UIImage(cgImage: cgImage, scale: 1, orientation: .right)
     }
+}
+
+// Helper timeout function
+private func withTimeout<T>(seconds: Double, operation: @escaping () async -> T) async -> T? {
+    async let task = operation()
+    async let timeout = Task.sleep(UInt64(seconds * 1_000_000_000))
+    let result = await (try? timeout, await task)
+    if result.0 != nil { return nil }
+    return await task
+}
+
+extension Notification.Name {
+    static let assessmentDidUpload = Notification.Name("assessmentDidUpload")
 }

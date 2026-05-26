@@ -37,14 +37,18 @@ final class HistoryViewModel: ObservableObject {
         do {
             let _: EmptyResponse = try await APIClient.shared.request(.deleteAssessment(id: record.id))
             await load(registrationID: registrationID)
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func deleteAll(registrationID: String) async {
         do {
             let _: EmptyResponse = try await APIClient.shared.request(.deleteAll(registrationID: registrationID))
             records.removeAll()
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func severity(for score: Int, type: AssessmentType) -> Severity {

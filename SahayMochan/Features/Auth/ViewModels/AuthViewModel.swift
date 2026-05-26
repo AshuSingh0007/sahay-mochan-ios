@@ -63,6 +63,8 @@ final class AuthViewModel: ObservableObject {
         currentUser = nil
     }
 
+    // MARK: - Private Helpers
+
     private func run(message: String? = nil, operation: () async throws -> Void) async {
         isLoading = true
         errorMessage = nil
@@ -99,15 +101,22 @@ final class AuthViewModel: ObservableObject {
         currentUser = user
     }
 
+    // MARK: - User Creation from Responses
+
     private func makeUser(from response: LoginResponse, fallbackRegistrationID: String) -> User {
         let responseUser = response.user
         let cachedUser = cachedUser(matching: fallbackRegistrationID, responseRegistrationID: responseUser?.registrationID ?? response.registrationID)
+
         let registrationID = nonEmpty(responseUser?.registrationID) ?? nonEmpty(response.registrationID) ?? cachedUser?.registrationID ?? fallbackRegistrationID
+
+        // ✅ Use the name directly from backend – no filtering of “SahayMochanUser”
+        // If the backend returns a placeholder, it will be shown. Real name will be shown when available.
+        let name = nonEmpty(responseUser?.name) ?? nonEmpty(response.name) ?? nonEmpty(cachedUser?.name) ?? "User"
 
         return User(
             userID: nonEmpty(responseUser?.userID) ?? nonEmpty(response.userID) ?? cachedUser?.userID,
             registrationID: registrationID,
-            name: realName(responseUser?.name) ?? realName(response.name) ?? realName(cachedUser?.name) ?? "",
+            name: name,
             email: nonEmpty(responseUser?.email) ?? nonEmpty(response.email) ?? cachedUser?.email ?? "",
             age: validAge(responseUser?.age) ?? validAge(response.age) ?? validAge(cachedUser?.age) ?? 0,
             gender: nonEmpty(responseUser?.gender) ?? nonEmpty(response.gender) ?? cachedUser?.gender ?? "",
@@ -123,10 +132,13 @@ final class AuthViewModel: ObservableObject {
         let responseUser = response.user
         let registrationID = nonEmpty(responseUser?.registrationID) ?? nonEmpty(response.registrationID) ?? request.registrationID
 
+        // ✅ Use name from response or request – no filtering
+        let name = nonEmpty(responseUser?.name) ?? nonEmpty(response.name) ?? request.name
+
         return User(
             userID: nonEmpty(responseUser?.userID) ?? nonEmpty(response.userID),
             registrationID: registrationID,
-            name: realName(responseUser?.name) ?? realName(response.name) ?? realName(request.name) ?? "",
+            name: name,
             email: nonEmpty(responseUser?.email) ?? nonEmpty(response.email) ?? request.email,
             age: validAge(responseUser?.age) ?? validAge(response.age) ?? request.age,
             gender: nonEmpty(responseUser?.gender) ?? nonEmpty(response.gender) ?? request.gender,
@@ -147,13 +159,6 @@ final class AuthViewModel: ObservableObject {
 
     private func validAge(_ value: Int?) -> Int? {
         guard let value, value > 0 else { return nil }
-        return value
-    }
-
-    private func realName(_ value: String?) -> String? {
-        guard let value = nonEmpty(value) else { return nil }
-        let normalized = value.replacingOccurrences(of: " ", with: "").lowercased()
-        guard normalized != "sahaymochanuser" else { return nil }
         return value
     }
 

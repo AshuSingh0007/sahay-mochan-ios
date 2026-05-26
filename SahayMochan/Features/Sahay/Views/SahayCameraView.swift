@@ -5,6 +5,8 @@ struct SahayCameraView: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
+            // The camera preview uses the session from the recorder.
+            // It automatically updates when the session becomes active.
             CameraPreviewView(session: recorder.session)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
@@ -12,6 +14,7 @@ struct SahayCameraView: View {
                         .stroke(MochanTheme.sage.opacity(0.5), lineWidth: 1)
                 )
 
+            // Recording indicator
             HStack(spacing: 5) {
                 Circle()
                     .fill(recorder.isRecording ? MochanTheme.severe : MochanTheme.sage)

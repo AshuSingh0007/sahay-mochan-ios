@@ -10,19 +10,20 @@ struct ProfileView: View {
             List {
                 if let user = auth.currentUser {
                     Section("Profile") {
-                        row("Name", display(user.name, fallback: user.registrationID))
-                        row("Email", display(user.email))
-                        row("Registration ID", display(user.registrationID))
+                        // ✅ Show real name – no fallback to registration ID
+                        row("Name", user.name.isEmpty ? "Not set" : user.name)
+                        row("Email", user.email.isEmpty ? "Not set" : user.email)
+                        row("Registration ID", user.registrationID)
                         row("Age", user.age > 0 ? "\(user.age)" : "--")
-                        row("Gender", display(user.gender))
-                        row("Phone", display(user.phone))
-                        row("Anonymous ID", display(user.anonymousID))
+                        row("Gender", user.gender.isEmpty ? "Not set" : user.gender)
+                        row("Phone", user.phone.isEmpty ? "Not set" : user.phone)
+                        row("Anonymous ID", user.anonymousID)
                     }
 
                     if user.isUnderage || user.parentName != nil || user.parentEmail != nil {
                         Section("Parent or Guardian") {
-                            row("Name", display(user.parentName))
-                            row("Email", display(user.parentEmail))
+                            row("Name", user.parentName ?? "Not set")
+                            row("Email", user.parentEmail ?? "Not set")
                         }
                     }
                 } else {
@@ -57,12 +58,5 @@ struct ProfileView: View {
                 .multilineTextAlignment(.trailing)
                 .foregroundColor(.secondary)
         }
-    }
-
-    private func display(_ value: String?, fallback: String = "--") -> String {
-        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return fallback }
-        let normalized = value.replacingOccurrences(of: " ", with: "").lowercased()
-        guard normalized != "sahaymochanuser" else { return fallback }
-        return value
     }
 }
