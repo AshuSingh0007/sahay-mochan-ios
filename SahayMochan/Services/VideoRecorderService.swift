@@ -12,7 +12,7 @@ final class VideoRecorderService: NSObject, ObservableObject {
         case assetWriterStartFailed
         case noValidFrames
         case recordingFailed(String)
-        case fileNotSaved   // ✅ Added missing case
+        case fileNotSaved
 
         var errorDescription: String? {
             switch self {
@@ -30,7 +30,7 @@ final class VideoRecorderService: NSObject, ObservableObject {
 
     @Published private(set) var isRecording = false
     @Published private(set) var lastRecordedURL: URL?
-    @Published private(set) var errorMessage: String?
+    @Published private(set) var errorMessage: String?   // ✅ Fixed: private(set)
 
     let session = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -112,6 +112,7 @@ final class VideoRecorderService: NSObject, ObservableObject {
             throw RecorderError.assetWriterCreationFailed
         }
 
+        // Portrait dimensions – width 720, height 1280
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: 720,
@@ -119,12 +120,14 @@ final class VideoRecorderService: NSObject, ObservableObject {
         ]
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         writerInput.expectsMediaDataInRealTime = true
-        writerInput.transform = CGAffineTransform(rotationAngle: .pi / 2)
+        writerInput.transform = .identity   // No transform – we rotate pixel buffers manually
 
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: writerInput,
-                                                           sourcePixelBufferAttributes: [
+        // Explicit type annotation to avoid warning
+        let pixelBufferAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-        ])
+        ]
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: writerInput,
+                                                           sourcePixelBufferAttributes: pixelBufferAttributes)
 
         if assetWriter.canAdd(writerInput) {
             assetWriter.add(writerInput)
@@ -204,11 +207,55 @@ final class VideoRecorderService: NSObject, ObservableObject {
             connection.isVideoMirrored = true
         }
     }
+
+    // MARK: - Pixel buffer rotation helper (90° clockwise, for front camera)
+    private func rotatePixelBuffer(_ srcBuffer: CVPixelBuffer) -> CVPixelBuffer? {
+        let srcWidth = CVPixelBufferGetWidth(srcBuffer)
+        let srcHeight = CVPixelBufferGetHeight(srcBuffer)
+        // Destination dimensions: swapped (portrait)
+        let dstWidth = srcHeight
+        let dstHeight = srcWidth
+
+        var dstBuffer: CVPixelBuffer?
+        let attrs: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: dstWidth,
+            kCVPixelBufferHeightKey as String: dstHeight
+        ]
+        guard CVPixelBufferCreate(kCFAllocatorDefault, dstWidth, dstHeight,
+                                  kCVPixelFormatType_32BGRA, attrs as CFDictionary, &dstBuffer) == kCVReturnSuccess,
+              let dstBuffer = dstBuffer else { return nil }
+
+        CVPixelBufferLockBaseAddress(srcBuffer, .readOnly)
+        CVPixelBufferLockBaseAddress(dstBuffer, [])
+        defer {
+            CVPixelBufferUnlockBaseAddress(srcBuffer, .readOnly)
+            CVPixelBufferUnlockBaseAddress(dstBuffer, [])
+        }
+
+        let srcBase = CVPixelBufferGetBaseAddress(srcBuffer)
+        let dstBase = CVPixelBufferGetBaseAddress(dstBuffer)
+        let srcRowBytes = CVPixelBufferGetBytesPerRow(srcBuffer)
+        let dstRowBytes = CVPixelBufferGetBytesPerRow(dstBuffer)
+
+        // 90° clockwise rotation
+        for y in 0..<srcHeight {
+            for x in 0..<srcWidth {
+                let srcOffset = y * srcRowBytes + x * 4
+                let dstX = y
+                let dstY = srcWidth - 1 - x
+                let dstOffset = dstY * dstRowBytes + dstX * 4
+                memcpy(dstBase?.advanced(by: dstOffset), srcBase?.advanced(by: srcOffset), 4)
+            }
+        }
+        return dstBuffer
+    }
 }
 
 // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 extension VideoRecorderService: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // Pass original frame for AI analysis
         frameHandler?(sampleBuffer)
 
         guard isRecording, let assetWriter = assetWriter, let videoInput = videoInput, videoInput.isReadyForMoreMediaData else {
@@ -223,8 +270,14 @@ extension VideoRecorderService: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        if pixelBufferAdaptor?.append(pixelBuffer, withPresentationTime: timestamp) == false {
-            print("⚠️ Failed to append pixel buffer at time \(timestamp.seconds)")
+        // Rotate pixel buffer to portrait orientation
+        guard let rotatedBuffer = rotatePixelBuffer(pixelBuffer) else {
+            print("⚠️ Failed to rotate pixel buffer")
+            return
+        }
+
+        if pixelBufferAdaptor?.append(rotatedBuffer, withPresentationTime: timestamp) == false {
+            print("⚠️ Failed to append rotated pixel buffer at time \(timestamp.seconds)")
         }
     }
 }
