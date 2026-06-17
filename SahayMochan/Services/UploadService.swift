@@ -24,9 +24,13 @@ final class UploadService {
     static let shared = UploadService()
 
     func useTrialAndUpload(user: User, result: AssessmentResult) async throws {
-        let trialBody = ["registration_id": user.registrationID, "assessment_type": result.type.rawValue]
-        let _: APIMessageResponse = try await APIClient.shared.request(.useTrial, body: trialBody)
-        _ = try await uploadAssessment(user: user, result: result)
+        let response = try await uploadAssessment(user: user, result: result)
+        if let assessmentID = response.assessmentID {
+            let _: APIMessageResponse = try await APIClient.shared.request(.useTrialAfterUpload(assessmentID: assessmentID), body: Optional<String>.none)
+        } else {
+            let trialBody = ["registration_id": user.registrationID, "assessment_type": result.type.rawValue]
+            let _: APIMessageResponse = try await APIClient.shared.request(.useTrial, body: trialBody)
+        }
     }
 
     func uploadAssessment(user: User, result: AssessmentResult) async throws -> APIMessageResponse {
@@ -47,15 +51,26 @@ final class UploadService {
             throw UploadError.missingCSVFile(result.questionnaireCSVURL.lastPathComponent)
         }
 
+        // ✅ Build all required fields
         var fields: [String: String] = [
-            "registration_id": user.registrationID
+            "registration_id": user.registrationID,
+            "anonymous_id": user.anonymousID,
+            "age": "\(user.age)",
+            "assessment_type": result.type.rawValue,
+            "questionnaire_score": "\(result.score)"
         ]
 
+        // Add assessment-specific score
         switch result.type {
         case .anxiety:
             fields["gad_score"] = "\(result.score)"
         case .depression:
             fields["phq_score"] = "\(result.score)"
+        }
+
+        // Add AI score if available
+        if let aiScore = result.aiScore {
+            fields["ai_raw_score"] = String(format: "%.4f", aiScore)
         }
 
         let files = [
@@ -65,7 +80,7 @@ final class UploadService {
         ]
 
         // Log upload attempt
-        print("📤 Uploading assessment: type=\(result.type.rawValue), score=\(result.score), files=\(files.map { $0.fieldName })")
+        print("📤 Uploading assessment: type=\(result.type.rawValue), score=\(result.score), fields=\(fields)")
         do {
             let response = try await APIClient.shared.uploadMultipart(endpoint: .uploadAssessment, fields: fields, files: files)
             print("✅ Upload successful: \(response.message ?? "OK")")

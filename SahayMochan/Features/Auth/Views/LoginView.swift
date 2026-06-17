@@ -1,8 +1,8 @@
 import SwiftUI
-import Combine
 
 struct LoginView: View {
     @EnvironmentObject private var auth: AuthViewModel
+    @State private var selectedRole: UserRole = .patient
     @State private var registrationID = ""
     @State private var password = ""
     @State private var showRegister = false
@@ -17,21 +17,30 @@ struct LoginView: View {
                         Text("SahayMochan")
                             .font(.largeTitle.bold())
                             .foregroundColor(MochanTheme.sageDark)
-                        Text("Sahay anxiety care and Mochan depression care in one private workspace.")
+                        Text("Private mental health assessment and care workspace.")
                             .foregroundColor(.secondary)
                     }
                     .padding(.top, 36)
 
                     VStack(spacing: 14) {
-                        TextField("Registration ID", text: $registrationID)
+                        Picker("Role", selection: $selectedRole) {
+                            ForEach(UserRole.allCases) { role in
+                                Text(role.rawValue).tag(role)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        TextField(selectedRole == .patient ? "Registration ID" : "Clinician ID", text: $registrationID)
                             .textContentType(.username)
                             .autocapitalization(.none)
                             .textFieldStyle(.roundedBorder)
+
                         SecureField("Password", text: $password)
                             .textContentType(.password)
                             .textFieldStyle(.roundedBorder)
+
                         Button {
-                            Task { await auth.login(registrationID: registrationID, password: password) }
+                            Task { await auth.login(registrationID: registrationID, password: password, role: selectedRole) }
                         } label: {
                             if auth.isLoading { ProgressView().tint(.white) } else { Text("Login") }
                         }
@@ -55,7 +64,7 @@ struct LoginView: View {
             .background(MochanTheme.sageBackground.ignoresSafeArea())
             .navigationBarHidden(true)
             .sheet(isPresented: $showConsent) { ConsentView(onAccept: { showConsent = false; showRegister = true }) }
-            .sheet(isPresented: $showRegister) { RegisterView() }
+            .sheet(isPresented: $showRegister) { RegisterView(initialRole: selectedRole) }
             .sheet(isPresented: $showForgot) { ForgotPasswordView() }
         }
     }

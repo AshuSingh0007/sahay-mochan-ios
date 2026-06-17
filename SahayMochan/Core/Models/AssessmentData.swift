@@ -155,15 +155,17 @@ struct TrialInfo: Codable, Equatable {
     var assessmentType: String? = nil
     var remainingTrials: Int? = nil
     var canTake: Bool? = nil
+    var canProceed: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case registrationID = "registration_id"
         case assessmentType = "assessment_type"
         case remainingTrials = "remaining_trials"
         case canTake = "can_take"
+        case canProceed = "can_proceed"
     }
 
-    var canTakeAssessment: Bool { canTake ?? false }
+    var canTakeAssessment: Bool { canProceed ?? canTake ?? false }
 }
 
 typealias TrialStatus = TrialInfo

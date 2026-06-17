@@ -20,7 +20,11 @@ struct RootView: View {
     var body: some View {
         Group {
             if authViewModel.isAuthenticated {
-                HomeView()
+                if authViewModel.role == .clinician {
+                    ClinicianDashboardView()
+                } else {
+                    HomeView()
+                }
             } else {
                 LoginView()
             }

@@ -3,6 +3,12 @@ import Foundation
 struct APIMessageResponse: Codable {
     var success: Bool? = nil
     var message: String? = nil
+    var assessmentID: String? = nil
+    
+    enum CodingKeys: String, CodingKey {
+        case success, message
+        case assessmentID = "assessment_id"
+    }
 }
 
 struct ErrorResponse: Codable {

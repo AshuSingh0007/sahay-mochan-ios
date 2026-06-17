@@ -15,4 +15,19 @@ final class HomeViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
     }
+
+    func canProceed(user: User, type: AssessmentType) async -> Bool {
+        do {
+            let status: TrialStatus = try await APIClient.shared.request(.checkTrials(registrationID: user.registrationID, type: type))
+            if type == .anxiety {
+                anxietyTrials = status
+            } else {
+                depressionTrials = status
+            }
+            return status.canTakeAssessment
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
 }

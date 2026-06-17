@@ -1,5 +1,12 @@
 import Foundation
 
+enum UserRole: String, Codable, CaseIterable, Identifiable {
+    case patient = "Patient"
+    case clinician = "Clinician"
+
+    var id: String { rawValue }
+}
+
 struct LoginRequest: Codable {
     let registrationID: String
     let password: String
@@ -11,24 +18,16 @@ struct LoginRequest: Codable {
 }
 
 struct RegisterRequest: Codable {
-    var registrationID: String = ""
     var name: String = ""
     var email: String = ""
-    var age: Int = 18 { didSet { isUnderage = age < 18 } }
+    var age: Int = 18
     var gender: String = ""
     var phoneNo: String = ""
     var password: String = ""
-    var parentName: String = ""
-    var parentEmail: String = ""
-    var isUnderage: Bool = false
 
     enum CodingKeys: String, CodingKey {
-        case registrationID = "registration_id"
         case phoneNo = "phone_no"
         case name, email, age, gender, password
-        case parentName = "parent_name"
-        case parentEmail = "parent_email"
-        case isUnderage = "is_underage"
     }
 }
 
@@ -37,6 +36,7 @@ struct LoginResponse: Decodable {
     var message: String? = nil
     var user: User? = nil
     var registrationID: String? = nil
+    var clinicianID: String? = nil
     var userID: String? = nil
     var token: String? = nil
     var name: String? = nil
@@ -46,15 +46,14 @@ struct LoginResponse: Decodable {
     var phoneNo: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case success, message, user, token, name, email, age, gender, data, student, profile
+        case success, message, user, token, name, email, age, gender, data, patient, clinician, profile
         case registrationID = "registration_id"
+        case clinicianID = "clinician_id"
         case userID = "user_id"
         case phoneNo = "phone_no"
         case phone
         case phoneNumber = "phone_number"
     }
-
-    init() {}
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -63,9 +62,11 @@ struct LoginResponse: Decodable {
         token = try container.decodeIfPresent(String.self, forKey: .token)
         user = try container.decodeIfPresent(User.self, forKey: .user)
             ?? container.decodeIfPresent(User.self, forKey: .data)
-            ?? container.decodeIfPresent(User.self, forKey: .student)
+            ?? container.decodeIfPresent(User.self, forKey: .patient)
+            ?? container.decodeIfPresent(User.self, forKey: .clinician)
             ?? container.decodeIfPresent(User.self, forKey: .profile)
         registrationID = try container.decodeIfPresent(String.self, forKey: .registrationID)
+        clinicianID = try container.decodeIfPresent(String.self, forKey: .clinicianID)
         userID = try container.decodeIfPresent(String.self, forKey: .userID)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         email = try container.decodeIfPresent(String.self, forKey: .email)
@@ -82,6 +83,7 @@ struct RegisterResponse: Decodable {
     var message: String? = nil
     var user: User? = nil
     var registrationID: String? = nil
+    var clinicianID: String? = nil
     var userID: String? = nil
     var token: String? = nil
     var name: String? = nil
@@ -91,15 +93,14 @@ struct RegisterResponse: Decodable {
     var phoneNo: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case success, message, user, token, name, email, age, gender, data, student, profile
+        case success, message, user, token, name, email, age, gender, data, patient, clinician, profile
         case registrationID = "registration_id"
+        case clinicianID = "clinician_id"
         case userID = "user_id"
         case phoneNo = "phone_no"
         case phone
         case phoneNumber = "phone_number"
     }
-
-    init() {}
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -108,9 +109,11 @@ struct RegisterResponse: Decodable {
         token = try container.decodeIfPresent(String.self, forKey: .token)
         user = try container.decodeIfPresent(User.self, forKey: .user)
             ?? container.decodeIfPresent(User.self, forKey: .data)
-            ?? container.decodeIfPresent(User.self, forKey: .student)
+            ?? container.decodeIfPresent(User.self, forKey: .patient)
+            ?? container.decodeIfPresent(User.self, forKey: .clinician)
             ?? container.decodeIfPresent(User.self, forKey: .profile)
         registrationID = try container.decodeIfPresent(String.self, forKey: .registrationID)
+        clinicianID = try container.decodeIfPresent(String.self, forKey: .clinicianID)
         userID = try container.decodeIfPresent(String.self, forKey: .userID)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         email = try container.decodeIfPresent(String.self, forKey: .email)
@@ -124,14 +127,8 @@ struct RegisterResponse: Decodable {
 
 typealias AuthResponse = LoginResponse
 
-struct OTPRequest: Codable {
-    let phone: String
-}
-
-struct VerifyOTPRequest: Codable {
-    let phone: String
-    let otp: String
-}
+struct OTPRequest: Codable { let phone: String }
+struct VerifyOTPRequest: Codable { let phone: String; let otp: String }
 
 struct ForgotPasswordRequest: Codable {
     let registrationID: String
@@ -143,4 +140,12 @@ struct ForgotPasswordRequest: Codable {
         case phone
         case newPassword = "new_password"
     }
+}
+
+struct RegistrationEmailRequest: Codable {
+    let action: String
+    let name: String
+    let email: String
+    let registrationId: String?
+    let clinicianId: String?
 }

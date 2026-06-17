@@ -1,9 +1,11 @@
 import SwiftUI
-import Combine
 
 struct DashboardView: View {
     @EnvironmentObject private var auth: AuthViewModel
     @StateObject private var viewModel = HomeViewModel()
+    @State private var showSahay = false
+    @State private var showMochan = false
+    @State private var alertMessage: String?
 
     var body: some View {
         NavigationView {
@@ -12,13 +14,27 @@ struct DashboardView: View {
                     Text("Welcome, \(displayName)")
                         .font(.title2.bold())
                         .foregroundColor(MochanTheme.sageDark)
+
                     HStack(spacing: 12) {
-                        NavigationLink { SahayAssessmentView() } label: { assessmentCard(title: "Sahay", subtitle: "GAD-7 anxiety", systemImage: "waveform.path.ecg", trials: viewModel.anxietyTrials?.remainingTrials) }
-                        NavigationLink { MochanAssessmentView() } label: { assessmentCard(title: "Mochan", subtitle: "PHQ-9 depression", systemImage: "heart.text.square", trials: viewModel.depressionTrials?.remainingTrials) }
+                        Button {
+                            Task { await openAssessment(.anxiety) }
+                        } label: {
+                            assessmentCard(title: "Sahay", subtitle: "GAD-7 anxiety", systemImage: "waveform.path.ecg", trials: viewModel.anxietyTrials?.remainingTrials)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            Task { await openAssessment(.depression) }
+                        } label: {
+                            assessmentCard(title: "Mochan", subtitle: "PHQ-9 depression", systemImage: "heart.text.square", trials: viewModel.depressionTrials?.remainingTrials)
+                        }
+                        .buttonStyle(.plain)
                     }
+
                     Text("Wellness Tools")
                         .font(.headline)
                         .foregroundColor(MochanTheme.sageDark)
+
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         tool("Breathing", "lungs", BreathingView())
                         tool("Grounding", "hand.raised", GroundingView())
@@ -27,14 +43,36 @@ struct DashboardView: View {
                         tool("Sleep", "moon.zzz", SleepTrackerView())
                         tool("Water", "drop", WaterTrackerView())
                     }
+
                     if let error = viewModel.errorMessage { Text(error).foregroundColor(MochanTheme.severe) }
                 }
                 .padding()
             }
             .background(MochanTheme.sageBackground.ignoresSafeArea())
             .navigationTitle("SahayMochan")
+            .background(
+                NavigationLink("", isActive: $showSahay) { SahayAssessmentView() }.hidden()
+            )
+            .background(
+                NavigationLink("", isActive: $showMochan) { MochanAssessmentView() }.hidden()
+            )
+            .alert("Assessment unavailable", isPresented: Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(alertMessage ?? "")
+            }
         }
         .task { if let user = auth.currentUser { await viewModel.refreshTrials(for: user) } }
+    }
+
+    private func openAssessment(_ type: AssessmentType) async {
+        guard let user = auth.currentUser else { return }
+        let canProceed = await viewModel.canProceed(user: user, type: type)
+        if canProceed {
+            if type == .anxiety { showSahay = true } else { showMochan = true }
+        } else {
+            alertMessage = "No trials are available for this assessment."
+        }
     }
 
     private func assessmentCard(title: String, subtitle: String, systemImage: String, trials: Int?) -> some View {
@@ -60,7 +98,7 @@ struct DashboardView: View {
     }
 
     private var displayName: String {
-        guard let name = auth.currentUser?.name, !name.isEmpty else { return "SahayMochan User" }
+        guard let name = auth.currentUser?.name, !name.isEmpty else { return "User" }
         return name
     }
 }
