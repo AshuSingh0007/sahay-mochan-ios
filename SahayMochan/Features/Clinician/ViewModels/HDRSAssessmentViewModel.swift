@@ -28,11 +28,15 @@ final class HDRSAssessmentViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var result: ClinicalAssessmentResponse?
 
-    func submit(patient: ClinicianPatient) async {
+    func submit(patient: ClinicianPatient, clinicianID: String) async {
         isSubmitting = true
         errorMessage = nil
         do {
-            let body = ClinicalAssessmentRequest(registrationID: patient.registrationID, scores: scores)
+            let body = ClinicalAssessmentRequest(
+                patientID: patient.patientID,   // ✅ UUID, not registration_id
+                clinicianID: clinicianID,
+                itemScores: scores
+            )
             result = try await APIClient.shared.request(.hdrsAssessment, body: body)
         } catch {
             errorMessage = error.localizedDescription

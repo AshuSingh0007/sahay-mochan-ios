@@ -1,12 +1,6 @@
 import Combine
 import Foundation
 
-struct ClinicalQuestion: Identifiable, Equatable {
-    let id: Int
-    let text: String
-    let maxScore: Int
-}
-
 @MainActor
 final class HAMAAssessmentViewModel: ObservableObject {
     static let questions: [ClinicalQuestion] = [
@@ -31,25 +25,19 @@ final class HAMAAssessmentViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var result: ClinicalAssessmentResponse?
 
-    func submit(patient: ClinicianPatient) async {
+    func submit(patient: ClinicianPatient, clinicianID: String) async {
         isSubmitting = true
         errorMessage = nil
         do {
-            let body = ClinicalAssessmentRequest(registrationID: patient.registrationID, scores: scores)
+            let body = ClinicalAssessmentRequest(
+                patientID: patient.patientID,   // ✅ UUID, not registration_id
+                clinicianID: clinicianID,
+                itemScores: scores
+            )
             result = try await APIClient.shared.request(.hamaAssessment, body: body)
         } catch {
             errorMessage = error.localizedDescription
         }
         isSubmitting = false
-    }
-}
-
-struct ClinicalAssessmentRequest: Codable {
-    let registrationID: String
-    let scores: [Int]
-
-    enum CodingKeys: String, CodingKey {
-        case registrationID = "registration_id"
-        case scores
     }
 }

@@ -24,13 +24,18 @@ final class UploadService {
     static let shared = UploadService()
 
     func useTrialAndUpload(user: User, result: AssessmentResult) async throws {
-        let response = try await uploadAssessment(user: user, result: result)
-        if let assessmentID = response.assessmentID {
-            let _: APIMessageResponse = try await APIClient.shared.request(.useTrialAfterUpload(assessmentID: assessmentID), body: Optional<String>.none)
-        } else {
-            let trialBody = ["registration_id": user.registrationID, "assessment_type": result.type.rawValue]
-            let _: APIMessageResponse = try await APIClient.shared.request(.useTrial, body: trialBody)
-        }
+        // 1. Upload the assessment (video + CSVs)
+        _ = try await uploadAssessment(user: user, result: result)
+
+        // 2. Always decrement trial using the body‑based endpoint (back‑end expects JSON)
+        let trialBody = [
+            "registration_id": user.registrationID,
+            "assessment_type": result.type.rawValue
+        ]
+        let _: APIMessageResponse = try await APIClient.shared.request(.useTrial, body: trialBody)
+
+        // 3. Clean up temporary files
+        cleanupTemporaryFiles(for: result)
     }
 
     func uploadAssessment(user: User, result: AssessmentResult) async throws -> APIMessageResponse {
@@ -51,7 +56,7 @@ final class UploadService {
             throw UploadError.missingCSVFile(result.questionnaireCSVURL.lastPathComponent)
         }
 
-        // ✅ Build all required fields
+        // Build all required fields
         var fields: [String: String] = [
             "registration_id": user.registrationID,
             "anonymous_id": user.anonymousID,
@@ -60,7 +65,7 @@ final class UploadService {
             "questionnaire_score": "\(result.score)"
         ]
 
-        // Add assessment-specific score
+        // Add assessment‑specific score
         switch result.type {
         case .anxiety:
             fields["gad_score"] = "\(result.score)"
@@ -107,6 +112,13 @@ final class UploadService {
             return "video/x-m4v"
         default:
             return "video/mp4"
+        }
+    }
+
+    private func cleanupTemporaryFiles(for result: AssessmentResult) {
+        let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
+        if let videoURL = result.videoURL?.standardizedFileURL, videoURL.path.hasPrefix(temporaryDirectory.path) {
+            try? FileManager.default.removeItem(at: videoURL)
         }
     }
 }

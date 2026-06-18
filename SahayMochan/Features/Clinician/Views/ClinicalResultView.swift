@@ -66,11 +66,11 @@ struct ClinicalResultView: View {
     private func saveSeverity() async {
         isSaving = true
         do {
-            // ✅ FIX: Convert assessmentID to String because the endpoint expects a string (UUID)
+            // ✅ assessmentID is now a String – pass directly
             let _: APIMessageResponse = try await APIClient.shared.request(
                 .severityDirect(
                     assessmentType: assessmentType,
-                    assessmentID: String(result.assessmentID),   // ← Converted to String
+                    assessmentID: result.assessmentID,   // ← String, no conversion needed
                     severity: selectedSeverity
                 ),
                 body: Optional<String>.none
