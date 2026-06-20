@@ -19,14 +19,14 @@ struct DashboardView: View {
                         Button {
                             Task { await openAssessment(.anxiety) }
                         } label: {
-                            assessmentCard(title: "Sahay", subtitle: "GAD-7 anxiety", systemImage: "waveform.path.ecg", trials: viewModel.anxietyTrials?.remainingTrials)
+                            assessmentCard(title: "Sahay", subtitle: "GAD-7 anxiety", systemImage: "waveform.path.ecg", type: .anxiety)
                         }
                         .buttonStyle(.plain)
 
                         Button {
                             Task { await openAssessment(.depression) }
                         } label: {
-                            assessmentCard(title: "Mochan", subtitle: "PHQ-9 depression", systemImage: "heart.text.square", trials: viewModel.depressionTrials?.remainingTrials)
+                            assessmentCard(title: "Mochan", subtitle: "PHQ-9 depression", systemImage: "heart.text.square", type: .depression)
                         }
                         .buttonStyle(.plain)
                     }
@@ -75,12 +75,15 @@ struct DashboardView: View {
         }
     }
 
-    private func assessmentCard(title: String, subtitle: String, systemImage: String, trials: Int?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func assessmentCard(title: String, subtitle: String, systemImage: String, type: AssessmentType) -> some View {
+        let trials = viewModel.remainingTrials(for: type)
+        return VStack(alignment: .leading, spacing: 10) {
             Image(systemName: systemImage).font(.title).foregroundColor(MochanTheme.purple)
             Text(title).font(.headline).foregroundColor(MochanTheme.sageDark)
             Text(subtitle).font(.caption).foregroundColor(.secondary)
-            Text("Trials: \(trials.map(String.init) ?? "--")").font(.caption2).foregroundColor(MochanTheme.sage)
+            Text("Trials: \(trials)")
+                .font(.caption2)
+                .foregroundColor(MochanTheme.sage)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .mochanCard()

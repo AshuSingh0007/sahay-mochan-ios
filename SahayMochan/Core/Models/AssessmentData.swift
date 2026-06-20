@@ -150,22 +150,32 @@ struct AssessmentResult: Equatable {
     let questionnaireCSVURL: URL
 }
 
-struct TrialInfo: Codable, Equatable {
-    var registrationID: String? = nil
-    var assessmentType: String? = nil
-    var remainingTrials: Int? = nil
-    var canTake: Bool? = nil
-    var canProceed: Bool? = nil
+// MARK: - Corrected Trial Check Response (matches actual backend)
+struct TrialCheckResponse: Codable, Equatable {
+    let success: Bool
+    let canProceed: Bool
+    let assessmentType: String
+    let trialsRemaining: Int
+    let totalTrials: Int
+    let message: String?
 
     enum CodingKeys: String, CodingKey {
-        case registrationID = "registration_id"
-        case assessmentType = "assessment_type"
-        case remainingTrials = "remaining_trials"
-        case canTake = "can_take"
+        case success
         case canProceed = "can_proceed"
+        case assessmentType = "assessment_type"
+        case trialsRemaining = "trials_remaining"
+        case totalTrials = "total_trials"
+        case message
     }
 
-    var canTakeAssessment: Bool { canProceed ?? canTake ?? false }
+    func remainingTrials(for type: AssessmentType) -> Int {
+        return trialsRemaining
+    }
+
+    func canTake(for type: AssessmentType) -> Bool {
+        return canProceed
+    }
 }
 
-typealias TrialStatus = TrialInfo
+// Keep the typealias for backward compatibility
+typealias TrialStatus = TrialCheckResponse

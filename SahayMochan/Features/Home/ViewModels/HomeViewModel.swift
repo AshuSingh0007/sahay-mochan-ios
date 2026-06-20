@@ -3,8 +3,8 @@ import Foundation
 
 @MainActor
 final class HomeViewModel: ObservableObject {
-    @Published var anxietyTrials: TrialStatus?
-    @Published var depressionTrials: TrialStatus?
+    @Published var anxietyTrials: TrialCheckResponse?
+    @Published var depressionTrials: TrialCheckResponse?
     @Published var errorMessage: String?
 
     func refreshTrials(for user: User) async {
@@ -16,15 +16,33 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
+    func remainingTrials(for type: AssessmentType) -> Int {
+        switch type {
+        case .anxiety:
+            return anxietyTrials?.remainingTrials(for: .anxiety) ?? 0
+        case .depression:
+            return depressionTrials?.remainingTrials(for: .depression) ?? 0
+        }
+    }
+
+    func canTake(for type: AssessmentType) -> Bool {
+        switch type {
+        case .anxiety:
+            return anxietyTrials?.canTake(for: .anxiety) ?? false
+        case .depression:
+            return depressionTrials?.canTake(for: .depression) ?? false
+        }
+    }
+
     func canProceed(user: User, type: AssessmentType) async -> Bool {
         do {
-            let status: TrialStatus = try await APIClient.shared.request(.checkTrials(registrationID: user.registrationID, type: type))
+            let status: TrialCheckResponse = try await APIClient.shared.request(.checkTrials(registrationID: user.registrationID, type: type))
             if type == .anxiety {
                 anxietyTrials = status
             } else {
                 depressionTrials = status
             }
-            return status.canTakeAssessment
+            return status.canTake(for: type)
         } catch {
             errorMessage = error.localizedDescription
             return false

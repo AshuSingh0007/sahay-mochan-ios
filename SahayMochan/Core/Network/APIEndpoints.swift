@@ -9,7 +9,7 @@ enum APIEndpoint {
     case registerClinician
     case sendPhoneOTP
     case verifyPhoneOTP
-    case checkTrials(registrationID: String, type: AssessmentType)   // ✅ now uses query params
+    case checkTrials(registrationID: String, type: AssessmentType)   // ✅ now uses path param for registration ID
     case useTrial
     // case useTrialAfterUpload(assessmentID: String)  // ❌ removed – no longer used
     case assessments(registrationID: String)
@@ -58,16 +58,19 @@ enum APIEndpoint {
             return Self.baseURL.appendingPathComponent("verify-phone-otp")
 
         case .checkTrials(let registrationID, let type):
-            var components = URLComponents(url: Self.baseURL.appendingPathComponent("api/trials/check"), resolvingAgainstBaseURL: false)!
+            // ✅ Correct: registration_id in the path, assessment_type as query param
+            var components = URLComponents(
+                url: Self.baseURL.appendingPathComponent("api/trials/check/\(registrationID)"),
+                resolvingAgainstBaseURL: false
+            )!
             components.queryItems = [
-                URLQueryItem(name: "registration_id", value: registrationID),
                 URLQueryItem(name: "assessment_type", value: type.rawValue)
             ]
             return components.url!
 
         case .useTrial:
-            return Self.baseURL.appendingPathComponent("api/trials/use")   // ✅ fixed path
-
+            return Self.baseURL.appendingPathComponent("api/trials/use-trial")
+            
         case .assessments(let registrationID):
             return Self.baseURL.appendingPathComponent("api/student/\(registrationID)/assessments")
 
