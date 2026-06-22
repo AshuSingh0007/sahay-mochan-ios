@@ -128,7 +128,12 @@ final class MochanViewModel: ObservableObject {
             try await UploadService.shared.useTrialAndUpload(user: user, result: result)
             uploadProgress = 1.0
             uploadMessage = "Assessment uploaded."
+            
+            // Notify that an assessment was uploaded
             NotificationCenter.default.post(name: .assessmentDidUpload, object: nil)
+            
+            // ✅ Notify dashboard to refresh trial counts immediately
+            NotificationCenter.default.post(name: .refreshTrials, object: nil)   // Uses definition from Extensions.swift
         } catch {
             errorMessage = error.localizedDescription
         }

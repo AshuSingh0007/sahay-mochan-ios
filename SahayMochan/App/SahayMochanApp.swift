@@ -10,6 +10,7 @@ struct SahayMochanApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(authViewModel)
+                .preferredColorScheme(.light)
         }
     }
 }

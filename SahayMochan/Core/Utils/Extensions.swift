@@ -28,3 +28,7 @@ extension FileManager {
 extension Double {
     var percentText: String { "\(Int((self * 100).rounded()))%" }
 }
+
+extension Notification.Name {
+    static let refreshTrials = Notification.Name("refreshTrials")
+}

@@ -126,7 +126,12 @@ final class SahayViewModel: ObservableObject {
             try await UploadService.shared.useTrialAndUpload(user: user, result: result)
             uploadProgress = 1.0
             uploadMessage = "Assessment uploaded."
+            
+            // Notify that an assessment was uploaded (for history, etc.)
             NotificationCenter.default.post(name: .assessmentDidUpload, object: nil)
+            
+            // ✅ Notify dashboard to refresh trial counts immediately
+            NotificationCenter.default.post(name: .refreshTrials, object: nil)   // Uses definition from Extensions.swift
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -172,6 +177,8 @@ private func withTimeout<T>(seconds: Double, operation: @escaping () async -> T)
     return await task
 }
 
+// MARK: - Notification Names
 extension Notification.Name {
     static let assessmentDidUpload = Notification.Name("assessmentDidUpload")
+    // ✅ refreshTrials is defined in Extensions.swift – no duplicate needed here
 }

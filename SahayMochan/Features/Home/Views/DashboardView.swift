@@ -62,7 +62,17 @@ struct DashboardView: View {
                 Text(alertMessage ?? "")
             }
         }
-        .task { if let user = auth.currentUser { await viewModel.refreshTrials(for: user) } }
+        .task {
+            if let user = auth.currentUser {
+                await viewModel.refreshTrials(for: user)
+            }
+        }
+        // ✅ Listen for refresh notification to update trials immediately
+        .onReceive(NotificationCenter.default.publisher(for: .refreshTrials)) { _ in
+            if let user = auth.currentUser {
+                Task { await viewModel.refreshTrials(for: user) }
+            }
+        }
     }
 
     private func openAssessment(_ type: AssessmentType) async {
