@@ -7,6 +7,9 @@ struct MochanResultView: View {
     @ObservedObject var viewModel: MochanViewModel
     var onReturnHome: (() -> Void)? = nil
 
+    @State private var pdfURL: URL?
+    @State private var showShare = false
+
     private var questionnaireLevel: Severity { .depression(score: result.score) }
     private var aiLevel: Severity { .depression(score: Int((result.aiScore ?? Double(result.score)).rounded())) }
 
@@ -16,12 +19,18 @@ struct MochanResultView: View {
                 levelSummary
                 careSuggestions
                 uploadPanel
+                downloadPDFButton
                 returnHomeButton
             }
             .padding()
         }
         .background(MochanTheme.sageBackground.ignoresSafeArea())
         .navigationTitle("Mochan Result")
+        .sheet(isPresented: $showShare) {
+            if let url = pdfURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
     }
 
     private var levelSummary: some View {
@@ -85,6 +94,21 @@ struct MochanResultView: View {
         .mochanCard()
     }
 
+    private var downloadPDFButton: some View {
+        Button("Download PDF") {
+            guard let user = auth.currentUser else { return }
+            if let url = PDFGenerator.generatePDF(
+                for: result,
+                user: user,
+                recommendations: recommendationLines
+            ) {
+                pdfURL = url
+                showShare = true
+            }
+        }
+        .mochanButton()
+    }
+
     private var returnHomeButton: some View {
         Button {
             if let onReturnHome {
@@ -116,5 +140,25 @@ struct MochanResultView: View {
         .padding(12)
         .background(MochanTheme.purpleMist)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var recommendationLines: [String] {
+        switch questionnaireLevel {
+        case .mild:
+            return [
+                "Continue daily check-ins, sleep tracking, and regular movement.",
+                "Use breathing or grounding exercises when stress begins to rise."
+            ]
+        case .moderate:
+            return [
+                "Schedule time for structured relaxation and journaling this week.",
+                "Consider speaking with a counselor or trusted support person."
+            ]
+        case .severe:
+            return [
+                "Reach out to a qualified mental health professional as soon as possible.",
+                "If you feel unsafe or at risk of harm, contact local emergency support immediately."
+            ]
+        }
     }
 }

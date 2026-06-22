@@ -7,6 +7,9 @@ struct SahayResultView: View {
     @ObservedObject var viewModel: SahayViewModel
     var onReturnHome: (() -> Void)? = nil
 
+    @State private var pdfURL: URL?
+    @State private var showShare = false
+
     private var questionnaireLevel: Severity { .anxiety(score: result.score) }
     private var aiLevel: Severity { .anxiety(score: Int((result.aiScore ?? Double(result.score)).rounded())) }
 
@@ -16,12 +19,18 @@ struct SahayResultView: View {
                 levelSummary
                 recommendations
                 uploadPanel
+                downloadPDFButton
                 returnHomeButton
             }
             .padding()
         }
         .background(MochanTheme.sageBackground.ignoresSafeArea())
         .navigationTitle("Sahay Result")
+        .sheet(isPresented: $showShare) {
+            if let url = pdfURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
     }
 
     private var levelSummary: some View {
@@ -90,6 +99,21 @@ struct SahayResultView: View {
             }
         }
         .mochanCard()
+    }
+
+    private var downloadPDFButton: some View {
+        Button("Download PDF") {
+            guard let user = auth.currentUser else { return }
+            if let url = PDFGenerator.generatePDF(
+                for: result,
+                user: user,
+                recommendations: recommendationLines
+            ) {
+                pdfURL = url
+                showShare = true
+            }
+        }
+        .mochanButton()
     }
 
     private var returnHomeButton: some View {

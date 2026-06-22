@@ -5,7 +5,9 @@ struct MochanQuestionnaireView: View {
     let onNext: () -> Void
     let onFinish: () -> Void
 
-    private let labels = [
+    @State private var isBengali = false
+
+    private let englishLabels = [
         "Not at all",
         "Several days",
         "More than half",
@@ -14,6 +16,14 @@ struct MochanQuestionnaireView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // Language Toggle
+            Picker("Language", selection: $isBengali) {
+                Text("English").tag(false)
+                Text("বাংলা").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+
             VStack(alignment: .leading, spacing: 6) {
                 Text("Question \(viewModel.currentQuestionIndex + 1) of \(PHQ9.questions.count)")
                     .font(.caption.bold())
@@ -23,13 +33,13 @@ struct MochanQuestionnaireView: View {
             }
 
             VStack(alignment: .leading, spacing: 16) {
-                Text(viewModel.currentQuestion.text)
+                Text(currentQuestionText)
                     .font(.title3.bold())
                     .foregroundColor(MochanTheme.sageDark)
                     .fixedSize(horizontal: false, vertical: true)
 
                 VStack(spacing: 10) {
-                    ForEach(0..<labels.count, id: \.self) { score in
+                    ForEach(0..<4, id: \.self) { score in
                         Button {
                             viewModel.responses[viewModel.currentQuestion.id] = score
                         } label: {
@@ -40,7 +50,7 @@ struct MochanQuestionnaireView: View {
                                     .frame(width: 28, height: 28)
                                     .background(MochanTheme.purple)
                                     .clipShape(Circle())
-                                Text(labels[score])
+                                Text(answerLabel(for: score))
                                     .foregroundColor(MochanTheme.sageDark)
                                 Spacer()
                                 if viewModel.responses[viewModel.currentQuestion.id] == score {
@@ -82,6 +92,27 @@ struct MochanQuestionnaireView: View {
                     .foregroundColor(MochanTheme.severe)
             }
         }
+    }
+
+    private var currentQuestionText: String {
+        guard isBengali else {
+            return viewModel.currentQuestion.text
+        }
+        let index = viewModel.currentQuestionIndex
+        guard index < BengaliTranslations.phq9Questions.count else {
+            return viewModel.currentQuestion.text
+        }
+        return BengaliTranslations.phq9Questions[index]
+    }
+
+    private func answerLabel(for score: Int) -> String {
+        guard isBengali else {
+            return englishLabels[score]
+        }
+        guard score < BengaliTranslations.answerOptions.count else {
+            return englishLabels[score]
+        }
+        return BengaliTranslations.answerOptions[score]
     }
 
     private func selectionBackground(score: Int) -> Color {
