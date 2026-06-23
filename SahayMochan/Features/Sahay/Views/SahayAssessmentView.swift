@@ -20,20 +20,23 @@ struct SahayAssessmentView: View {
                         onNext: advance,
                         onFinish: finishAssessment
                     )
+                    .padding(.top, 170)
                 } else {
                     introView
                 }
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom, 80)   // ✅ Prevents overlap with tab bar
 
             if isAssessmentActive || recorder.isRecording {
                 SahayCameraView(recorder: recorder)
-                    .frame(width: 120, height: 160)
+                    .frame(width: 110, height: 150)
                     .padding(.top, 12)
                     .padding(.trailing, 12)
             }
         }
         .navigationTitle("Sahay")
+        .toolbar(.hidden, for: .tabBar)   // ✅ Hide tab bar during assessment
         .sheet(isPresented: $showResult) {
             if let result = viewModel.result {
                 NavigationView {
@@ -124,13 +127,11 @@ struct SahayAssessmentView: View {
             var videoURL: URL?
             var recordingError: Error?
 
-            // Stop recording only if it was actually started
             if recorder.isRecording {
                 do {
                     videoURL = try await recorder.stopRecording()
                     print("✅ Sahay video recorded at: \(videoURL?.path ?? "nil")")
 
-                    // Verify the file exists on disk
                     if let url = videoURL, FileManager.default.fileExists(atPath: url.path) {
                         print("✅ Video file exists at: \(url)")
                     } else {
@@ -142,14 +143,12 @@ struct SahayAssessmentView: View {
                     print("❌ Sahay stopRecording error: \(error)")
                     recordingError = error
                     viewModel.errorMessage = error.localizedDescription
-                    // Try to use last recorded URL as fallback
                     if let lastURL = recorder.lastRecordedURL, FileManager.default.fileExists(atPath: lastURL.path) {
                         videoURL = lastURL
                         print("⚠️ Using lastRecordedURL: \(lastURL.path)")
                     }
                 }
             } else {
-                // No active recording – try to use last recorded URL
                 if let lastURL = recorder.lastRecordedURL, FileManager.default.fileExists(atPath: lastURL.path) {
                     videoURL = lastURL
                     print("⚠️ No active recording, using lastRecordedURL: \(lastURL.path)")
@@ -162,7 +161,6 @@ struct SahayAssessmentView: View {
             if let videoURL {
                 viewModel.setRecordedVideoURL(videoURL)
             } else {
-                // Still nil – ensure error is shown
                 if viewModel.errorMessage == nil {
                     viewModel.errorMessage = "Video recording failed. Please retake assessment."
                 }

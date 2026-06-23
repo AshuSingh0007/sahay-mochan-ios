@@ -20,20 +20,23 @@ struct MochanAssessmentView: View {
                         onNext: advance,
                         onFinish: finishAssessment
                     )
+                    .padding(.top, 170)
                 } else {
                     introView
                 }
             }
-            .padding()
+            .padding(.horizontal)
+            .padding(.bottom, 80)   // ✅ Prevents overlap with tab bar
 
             if isAssessmentActive || recorder.isRecording {
                 SahayCameraView(recorder: recorder)
-                    .frame(width: 120, height: 160)
+                    .frame(width: 110, height: 150)
                     .padding(.top, 12)
                     .padding(.trailing, 12)
             }
         }
         .navigationTitle("Mochan")
+        .toolbar(.hidden, for: .tabBar)   // ✅ Hide tab bar during assessment
         .sheet(isPresented: $showResult) {
             if let result = viewModel.result {
                 NavigationView {
@@ -50,7 +53,8 @@ struct MochanAssessmentView: View {
             recorder.stopSession()
         }
     }
-
+    
+    
     private var introView: some View {
         VStack(spacing: 16) {
             Image(systemName: "brain.head.profile")
@@ -124,13 +128,11 @@ struct MochanAssessmentView: View {
             var videoURL: URL?
             var recordingError: Error?
 
-            // Stop recording only if it was actually started
             if recorder.isRecording {
                 do {
                     videoURL = try await recorder.stopRecording()
                     print("✅ Mochan video recorded at: \(videoURL?.path ?? "nil")")
 
-                    // Verify the file exists on disk
                     if let url = videoURL, FileManager.default.fileExists(atPath: url.path) {
                         print("✅ Video file exists at: \(url)")
                     } else {
@@ -142,14 +144,12 @@ struct MochanAssessmentView: View {
                     print("❌ Mochan stopRecording error: \(error)")
                     recordingError = error
                     viewModel.errorMessage = error.localizedDescription
-                    // Try to use last recorded URL as fallback
                     if let lastURL = recorder.lastRecordedURL, FileManager.default.fileExists(atPath: lastURL.path) {
                         videoURL = lastURL
                         print("⚠️ Using lastRecordedURL: \(lastURL.path)")
                     }
                 }
             } else {
-                // No active recording – try to use last recorded URL
                 if let lastURL = recorder.lastRecordedURL, FileManager.default.fileExists(atPath: lastURL.path) {
                     videoURL = lastURL
                     print("⚠️ No active recording, using lastRecordedURL: \(lastURL.path)")
@@ -162,7 +162,6 @@ struct MochanAssessmentView: View {
             if let videoURL {
                 viewModel.setRecordedVideoURL(videoURL)
             } else {
-                // Still nil – ensure error is shown and result might still proceed (but upload will fail)
                 if viewModel.errorMessage == nil {
                     viewModel.errorMessage = "Video recording failed. Please retake assessment."
                 }
