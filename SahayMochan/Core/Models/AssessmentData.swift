@@ -88,13 +88,44 @@ struct AssessmentRecord: Codable, Identifiable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(Int.self, forKey: .id) ?? 0
         assessmentScore = try container.decodeIfPresent(Double.self, forKey: .assessmentScore)
-        gad7Score = try container.decodeIfPresent(Int.self, forKey: .gad7Score) ?? container.decodeIfPresent(Int.self, forKey: .gadScore)
-        phqScore = try container.decodeIfPresent(Int.self, forKey: .phqScore) ?? container.decodeIfPresent(Int.self, forKey: .phq9Score)
-        videoCount = try container.decodeIfPresent(Int.self, forKey: .videoCount)
 
-        let typeValue = try container.decodeIfPresent(String.self, forKey: .assessmentType)?.lowercased()
-        assessmentType = AssessmentType(rawValue: typeValue ?? "") ?? (phqScore != nil ? .depression : .anxiety)
-        questionnaireScore = try container.decodeIfPresent(Int.self, forKey: .questionnaireScore) ?? gad7Score ?? phqScore ?? 0
+        // Helper to decode scores that may be Double or Int
+        func decodeInt(from key: CodingKeys) -> Int? {
+            if let intValue = try? container.decodeIfPresent(Int.self, forKey: key) {
+                return intValue
+            }
+            if let doubleValue = try? container.decodeIfPresent(Double.self, forKey: key) {
+                return Int(doubleValue)
+            }
+            return nil
+        }
+
+        // Decode specific scores
+        let gadScore = decodeInt(from: .gad7Score) ?? decodeInt(from: .gadScore)
+        let phqScoreValue = decodeInt(from: .phqScore) ?? decodeInt(from: .phq9Score)
+
+        gad7Score = gadScore
+        phqScore = phqScoreValue
+
+        // ✅ Determine assessment type based on which score is non‑zero
+        if let gad = gadScore, gad > 0 {
+            assessmentType = .anxiety
+            questionnaireScore = gad
+        } else if let phq = phqScoreValue, phq > 0 {
+            assessmentType = .depression
+            questionnaireScore = phq
+        } else {
+            // Fallback: try to use assessment_type field if present
+            let typeValue = try container.decodeIfPresent(String.self, forKey: .assessmentType)?.lowercased()
+            if let type = AssessmentType(rawValue: typeValue ?? "") {
+                assessmentType = type
+            } else {
+                assessmentType = .anxiety
+            }
+            questionnaireScore = try container.decodeIfPresent(Int.self, forKey: .questionnaireScore) ?? 0
+        }
+
+        videoCount = try container.decodeIfPresent(Int.self, forKey: .videoCount)
 
         let dateString = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
         createdAt = Self.parseDate(dateString) ?? Date()
@@ -125,6 +156,8 @@ struct AssessmentRecord: Codable, Identifiable, Equatable {
 
     private static let isoDateFormatter = ISO8601DateFormatter()
 }
+
+// ... rest of the file (AssessmentHistoryResponse, AssessmentResult, TrialCheckResponse, etc.) unchanged ...
 
 struct AssessmentHistoryResponse: Codable {
     var success: Bool = false
