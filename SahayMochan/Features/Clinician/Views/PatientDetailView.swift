@@ -30,7 +30,7 @@ struct PatientDetailView: View {
                     row("GAD-7", latestGADScore.map { "\($0)" } ?? "None")
                     row("PHQ-9", latestPHQScore.map { "\($0)" } ?? "None")
                 }
-            }
+    }
 
             Section("Latest Clinical Assessments") {
                 row("HAM-A", patient.latestHamAScore.map { "\($0)" } ?? "None")
